@@ -195,6 +195,9 @@
 			);
 			mainGroup = 6B19778F2FD23B29005E1984;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				6B1977C22FD23BE2005E1984 /* XCRemoteSwiftPackageReference "AudioKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6B1977992FD23B29005E1984 /* Products */;
 			projectDirPath = "";
@@ -573,6 +576,17 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		6B1977C22FD23BE2005E1984 /* XCRemoteSwiftPackageReference "AudioKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/AudioKit/AudioKit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.7.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 	};
 	rootObject = 6B1977902FD23B29005E1984 /* Project object */;
 }
