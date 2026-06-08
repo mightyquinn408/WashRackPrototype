@@ -110,6 +110,7 @@ struct WashRackParameterContractTests {
             #expect(parameter.maxValue == spec.maxValue)
             #expect(parameter.unit == spec.unit)
             #expect(parameter.value == spec.defaultValue)
+            #expect(parameter.flags == spec.flags)
         }
     }
 
@@ -130,9 +131,19 @@ struct WashRackParameterContractTests {
         #expect(spec.range.upperBound == range.upperBound)
         #expect(spec.unit == unit)
         #expect(spec.defaultValue == defaultValue)
+        #expect(spec.flags == expectedFlags(for: address))
 
         let identifierLookup = WashRackParameterSpec.spec(for: identifier)
         #expect(identifierLookup?.address == spec.address)
         #expect(identifierLookup?.identifier == spec.identifier)
+    }
+
+    private func expectedFlags(for address: WashRackParameterAddress) -> AudioUnitParameterOptions {
+        switch address {
+        case .effectEnabled:
+            WashRackParameterSpec.booleanFlags
+        case .inputGain, .outputGain, .delayTime, .feedback, .dryWetMix, .lowPassCutoff, .lowPassResonance:
+            WashRackParameterSpec.continuousFlags
+        }
     }
 }
