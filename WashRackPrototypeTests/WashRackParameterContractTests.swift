@@ -114,6 +114,16 @@ struct WashRackParameterContractTests {
         }
     }
 
+    @Test
+    func outputGainDefaultPreservesUnityPassThroughContract() throws {
+        let tree = WashRackParameterTreeFactory.makeParameterTree()
+        let parameter = try #require(tree.parameter(withAddress: WashRackParameterAddress.outputGain.rawValue))
+
+        #expect(parameter.identifier == "outputGain")
+        #expect(parameter.unit == .decibels)
+        #expect(parameter.value == 0)
+    }
+
     private func assertSpec(
         _ address: WashRackParameterAddress,
         identifier: String,
