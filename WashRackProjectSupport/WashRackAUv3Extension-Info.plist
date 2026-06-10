@@ -25,6 +25,8 @@
 				<dict>
 					<key>description</key>
 					<string>WashRack</string>
+					<key>factoryFunction</key>
+					<string>$(PRODUCT_MODULE_NAME).WashRackAudioUnitViewController</string>
 					<key>manufacturer</key>
 					<string>QMQQ</string>
 					<key>name</key>
@@ -45,9 +47,9 @@
 			</array>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>
-		<string>com.apple.AudioUnit</string>
+		<string>com.apple.AudioUnit-UI</string>
 		<key>NSExtensionPrincipalClass</key>
-		<string>$(PRODUCT_MODULE_NAME).AudioUnitFactory</string>
+		<string>$(PRODUCT_MODULE_NAME).WashRackAudioUnitViewController</string>
 	</dict>
 </dict>
 </plist>

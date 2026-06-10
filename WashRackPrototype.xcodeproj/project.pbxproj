@@ -659,7 +659,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = WashRackProjectSupport/WashRackAUv3Extension-Info.plist;
+				INFOPLIST_FILE = "WashRackProjectSupport/WashRackAUv3Extension-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -690,7 +690,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = WashRackProjectSupport/WashRackAUv3Extension-Info.plist;
+				INFOPLIST_FILE = "WashRackProjectSupport/WashRackAUv3Extension-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
