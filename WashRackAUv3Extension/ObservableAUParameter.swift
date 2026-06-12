@@ -53,6 +53,19 @@ final class ObservableAUParameterGroup: ObservableAUParameterNode {
             dict[node.identifier] = ObservableAUParameterNode.create(node)
         }
     }
+
+    func syncFromParameters() {
+        for child in children.values {
+            switch child {
+            case let parameter as ObservableAUParameter:
+                parameter.syncFromParameter()
+            case let group as ObservableAUParameterGroup:
+                group.syncFromParameters()
+            default:
+                continue
+            }
+        }
+    }
 }
 
 @Observable
@@ -99,10 +112,6 @@ final class ObservableAUParameter: ObservableAUParameterNode {
                 guard address == self.parameter?.address, self.editingState == .inactive else {
                     return
                 }
-
-                self.editingState = .hostUpdate
-                self.value = auValue
-                self.editingState = .inactive
             }
         }
     }
@@ -114,6 +123,31 @@ final class ObservableAUParameter: ObservableAUParameterNode {
             editingState = .ended
             value = value
         }
+    }
+
+    func syncFromParameter() {
+        guard editingState == .inactive, let parameter else {
+            return
+        }
+
+        let parameterValue = parameter.value
+        guard parameterValue != value else {
+            return
+        }
+
+        editingState = .hostUpdate
+        value = parameterValue
+        editingState = .inactive
+    }
+
+    func syncFromHostDisplayValue(_ hostValue: AUValue) {
+        guard editingState == .inactive, hostValue != value else {
+            return
+        }
+
+        editingState = .hostUpdate
+        value = hostValue
+        editingState = .inactive
     }
 
     private func resolveEventType() -> AUParameterAutomationEventType {

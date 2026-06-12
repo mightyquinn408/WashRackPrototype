@@ -13,6 +13,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
     private var inputBusArray: AUAudioUnitBusArray!
     private var outputBusArray: AUAudioUnitBusArray!
     private let desiredOutputGainDecibelsBits: Atomic<UInt32>
+    private let currentOutputGainUIDisplayDecibelsBits: Atomic<UInt32>
     private var currentOutputGainLinear: AUValue
     private var targetOutputGainLinear: AUValue
     private var outputGainLinearStep: AUValue
@@ -42,6 +43,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         inputBus.maximumChannelCount = 2
         outputBus.maximumChannelCount = 2
         desiredOutputGainDecibelsBits = Atomic(defaultGainDecibels.bitPattern)
+        currentOutputGainUIDisplayDecibelsBits = Atomic(defaultGainDecibels.bitPattern)
         currentOutputGainLinear = defaultLinearGain
         targetOutputGainLinear = defaultLinearGain
         outputGainLinearStep = 0
@@ -237,6 +239,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
     private func syncOutputGainRenderState(fromDecibels decibels: AUValue) {
         let linearGain = Self.linearGain(fromDecibels: decibels)
         storeDesiredOutputGainDecibels(decibels)
+        currentOutputGainUIDisplayDecibelsBits.store(decibels.bitPattern, ordering: .relaxed)
         currentOutputGainLinear = linearGain
         targetOutputGainLinear = linearGain
         outputGainLinearStep = 0
@@ -247,6 +250,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         let linearGain = Self.linearGain(fromDecibels: decibels)
         targetOutputGainLinear = linearGain
         currentOutputGainLinear = linearGain
+        currentOutputGainUIDisplayDecibelsBits.store(decibels.bitPattern, ordering: .relaxed)
         outputGainLinearStep = 0
         outputGainRampSamplesRemaining = 0
     }
@@ -308,6 +312,10 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         currentOutputGainLinear = gain
         outputGainLinearStep = step
         outputGainRampSamplesRemaining = AUAudioFrameCount(remainingRampSamples)
+        currentOutputGainUIDisplayDecibelsBits.store(
+            Self.decibels(fromLinearGain: currentOutputGainLinear).bitPattern,
+            ordering: .relaxed
+        )
     }
 
     private static func linearGain(fromDecibels decibels: AUValue) -> AUValue {
@@ -316,6 +324,16 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         }
 
         return powf(10, decibels / 20)
+    }
+
+    private static func decibels(fromLinearGain linearGain: AUValue) -> AUValue {
+        let safeLinearGain = max(linearGain, 0.000_001)
+        return 20 * log10f(safeLinearGain)
+    }
+
+    @MainActor
+    var outputGainUIDisplayDecibels: AUValue {
+        AUValue(bitPattern: currentOutputGainUIDisplayDecibelsBits.load(ordering: .relaxed))
     }
 
     private static func linearGainValuesDiffer(_ lhs: AUValue, _ rhs: AUValue) -> Bool {

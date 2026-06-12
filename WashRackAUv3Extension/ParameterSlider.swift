@@ -21,6 +21,7 @@ struct ParameterSlider: View {
             ) {
                 Text(parameter.displayName)
             }
+            .animation(.linear(duration: 1.0 / 30.0), value: parameter.value)
             .accessibility(identifier: parameter.displayName)
 
             HStack {

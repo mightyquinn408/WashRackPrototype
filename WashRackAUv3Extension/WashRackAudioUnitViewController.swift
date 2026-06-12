@@ -5,9 +5,23 @@ import SwiftUI
 
 @MainActor
 public final class WashRackAudioUnitViewController: AUViewController, AUAudioUnitFactory {
+    private static var lastCreatedAudioUnit: AUAudioUnit?
+
+    @objc public var auAudioUnit: AUAudioUnit? {
+        didSet {
+            audioUnit = auAudioUnit
+            if let auAudioUnit {
+                Self.lastCreatedAudioUnit = auAudioUnit
+                configureViewIfPossible(audioUnit: auAudioUnit)
+                startParameterRefreshTimer()
+            }
+        }
+    }
+
     private var audioUnit: AUAudioUnit?
+    private var observableParameterTree: ObservableAUParameterGroup?
     private var hostingController: NSHostingController<WashRackMainView>?
-    private var observation: NSKeyValueObservation?
+    private var parameterRefreshTimer: Timer?
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
@@ -25,10 +39,34 @@ public final class WashRackAudioUnitViewController: AUViewController, AUAudioUni
     public override func viewDidLoad() {
         super.viewDidLoad()
         preferredContentSize = NSSize(width: 360, height: 140)
+        if audioUnit == nil {
+            audioUnit = Self.lastCreatedAudioUnit
+        }
+
         guard let audioUnit else {
             return
         }
         configureViewIfPossible(audioUnit: audioUnit)
+    }
+
+    public override func viewWillAppear() {
+        super.viewWillAppear()
+
+        if audioUnit == nil {
+            audioUnit = Self.lastCreatedAudioUnit
+        }
+
+        guard let audioUnit else {
+            return
+        }
+
+        configureViewIfPossible(audioUnit: audioUnit)
+        startParameterRefreshTimer()
+    }
+
+    public override func viewDidDisappear() {
+        super.viewDidDisappear()
+        stopParameterRefreshTimer()
     }
 
     nonisolated public func createAudioUnit(
@@ -54,18 +92,11 @@ public final class WashRackAudioUnitViewController: AUViewController, AUAudioUni
         )
 
         self.audioUnit = audioUnit
-        observation = audioUnit.observe(\.allParameterValues, options: [.new]) { _, _ in
-            guard let parameterTree = audioUnit.parameterTree else {
-                return
-            }
-
-            for parameter in parameterTree.allParameters {
-                parameter.value = parameter.value
-            }
-        }
+        Self.lastCreatedAudioUnit = audioUnit
 
         DispatchQueue.main.async {
             self.configureViewIfPossible(audioUnit: audioUnit)
+            self.startParameterRefreshTimer()
         }
 
         return audioUnit
@@ -80,6 +111,8 @@ public final class WashRackAudioUnitViewController: AUViewController, AUAudioUni
         guard let observableParameterTree = audioUnit.observableParameterTree else {
             return
         }
+
+        self.observableParameterTree = observableParameterTree
 
         let hostingController = NSHostingController(
             rootView: WashRackMainView(parameterTree: observableParameterTree)
@@ -97,5 +130,35 @@ public final class WashRackAudioUnitViewController: AUViewController, AUAudioUni
         ])
 
         self.hostingController = hostingController
+        syncOutputGainDisplayFromAudioUnit()
+    }
+
+    private func startParameterRefreshTimer() {
+        guard parameterRefreshTimer == nil else {
+            return
+        }
+
+        let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.syncOutputGainDisplayFromAudioUnit()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        parameterRefreshTimer = timer
+    }
+
+    private func stopParameterRefreshTimer() {
+        parameterRefreshTimer?.invalidate()
+        parameterRefreshTimer = nil
+    }
+
+    private func syncOutputGainDisplayFromAudioUnit() {
+        guard let washRackAudioUnit = audioUnit as? WashRackAudioUnit,
+              let observableParameterTree else {
+            return
+        }
+
+        let outputGainParameter: ObservableAUParameter = observableParameterTree.outputGain
+        outputGainParameter.syncFromHostDisplayValue(washRackAudioUnit.outputGainUIDisplayDecibels)
     }
 }
