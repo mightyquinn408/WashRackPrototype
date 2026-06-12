@@ -7,17 +7,18 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
 
     private let washRackParameterTree: AUParameterTree
     private let outputGainParameter: AUParameter
-    private var outputGainParameterObserverToken: AUParameterObserverToken?
     private let inputBus: AUAudioUnitBus
     private let outputBus: AUAudioUnitBus
     private var inputBusArray: AUAudioUnitBusArray!
     private var outputBusArray: AUAudioUnitBusArray!
     private let desiredOutputGainDecibelsBits: Atomic<UInt32>
     private let currentOutputGainUIDisplayDecibelsBits: Atomic<UInt32>
+    private let outputGainBaseValueGeneration: Atomic<UInt32>
     private var currentOutputGainLinear: AUValue
     private var targetOutputGainLinear: AUValue
     private var outputGainLinearStep: AUValue
     private var outputGainRampSamplesRemaining: AUAudioFrameCount
+    private var consumedOutputGainBaseValueGeneration: UInt32
 
     @objc public override init(
         componentDescription: AudioComponentDescription,
@@ -44,10 +45,12 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         outputBus.maximumChannelCount = 2
         desiredOutputGainDecibelsBits = Atomic(defaultGainDecibels.bitPattern)
         currentOutputGainUIDisplayDecibelsBits = Atomic(defaultGainDecibels.bitPattern)
+        outputGainBaseValueGeneration = Atomic(0)
         currentOutputGainLinear = defaultLinearGain
         targetOutputGainLinear = defaultLinearGain
         outputGainLinearStep = 0
         outputGainRampSamplesRemaining = 0
+        consumedOutputGainBaseValueGeneration = 0
 
         try super.init(componentDescription: componentDescription, options: options)
 
@@ -56,21 +59,32 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         outputBusArray = AUAudioUnitBusArray(audioUnit: self, busType: .output, busses: [outputBus])
         maximumFramesToRender = 512
 
-        outputGainParameterObserverToken = outputGainParameter.token(byAddingParameterObserver: { [weak self] address, value in
-            guard let self, address == self.outputGainParameter.address else {
+        washRackParameterTree.implementorValueObserver = { [weak self] parameter, value in
+            guard let self, parameter.address == self.outputGainParameter.address else {
                 return
             }
 
             self.storeDesiredOutputGainDecibels(value)
-        })
+            self.signalOutputGainBaseValueChange()
+        }
+
+        washRackParameterTree.implementorValueProvider = { [weak self] parameter in
+            guard let self else {
+                return 0
+            }
+
+            if parameter.address == self.outputGainParameter.address {
+                return self.outputGainHostVisibleValue()
+            }
+
+            guard let address = WashRackParameterAddress(rawValue: parameter.address) else {
+                return 0
+            }
+
+            return WashRackParameterSpec.spec(for: address).defaultValue
+        }
 
         syncOutputGainStateFromParameter()
-    }
-
-    deinit {
-        if let outputGainParameterObserverToken {
-            outputGainParameter.removeParameterObserver(outputGainParameterObserverToken)
-        }
     }
 
     public override var inputBusses: AUAudioUnitBusArray {
@@ -176,8 +190,6 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                             renderedFrames = eventFrame
                         }
 
-                        self.storeDesiredOutputGainDecibels(parameterEvent.value)
-
                         if parameterEvent.rampDurationSampleFrames > 0 {
                             self.beginOutputGainRamp(
                                 toDecibels: parameterEvent.value,
@@ -192,7 +204,8 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                 event = nextEvent
             }
 
-            if !handledOutputGainEvent {
+            if !handledOutputGainEvent,
+               self.consumePendingOutputGainBaseValueChange() {
                 let desiredOutputGainDecibels = self.loadDesiredOutputGainDecibels()
                 let desiredLinearGain = Self.linearGain(fromDecibels: desiredOutputGainDecibels)
 
@@ -224,6 +237,20 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         desiredOutputGainDecibelsBits.store(value.bitPattern, ordering: .relaxed)
     }
 
+    private func signalOutputGainBaseValueChange() {
+        outputGainBaseValueGeneration.wrappingAdd(1, ordering: .relaxed)
+    }
+
+    private func consumePendingOutputGainBaseValueChange() -> Bool {
+        let generation = outputGainBaseValueGeneration.load(ordering: .relaxed)
+        guard generation != consumedOutputGainBaseValueGeneration else {
+            return false
+        }
+
+        consumedOutputGainBaseValueGeneration = generation
+        return true
+    }
+
     private func restoredOutputGain(from state: [String: Any]?) -> AUValue? {
         guard let number = state?[Self.outputGainStateKey] as? NSNumber else {
             return nil
@@ -244,6 +271,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         targetOutputGainLinear = linearGain
         outputGainLinearStep = 0
         outputGainRampSamplesRemaining = 0
+        consumedOutputGainBaseValueGeneration = outputGainBaseValueGeneration.load(ordering: .relaxed)
     }
 
     private func setImmediateOutputGain(toDecibels decibels: AUValue) {
@@ -333,6 +361,10 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
 
     @MainActor
     var outputGainUIDisplayDecibels: AUValue {
+        AUValue(bitPattern: currentOutputGainUIDisplayDecibelsBits.load(ordering: .relaxed))
+    }
+
+    private func outputGainHostVisibleValue() -> AUValue {
         AUValue(bitPattern: currentOutputGainUIDisplayDecibelsBits.load(ordering: .relaxed))
     }
 
