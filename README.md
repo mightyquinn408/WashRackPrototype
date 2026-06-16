@@ -9,11 +9,9 @@ This repository currently serves two purposes:
 
 The project is intentionally being built in small, understandable phases so a beginner can follow how a standalone audio app grows into a host-visible plugin.
 
-## Current Branches
+## Current Status
 
-### `main`
-
-The `main` branch is the simpler starting point. It contains a standalone macOS prototype app with:
+The repository currently includes a standalone macOS prototype app with:
 
 - audio file loading
 - looped playback
@@ -25,11 +23,7 @@ The signal flow in the app is:
 
 `AudioPlayer -> Delay -> LowPassFilter -> Output`
 
-This version is useful if you want to learn the basic AudioKit app side before looking at AUv3 plugin architecture.
-
-### `phase1-shared-parameter-contract`
-
-This branch keeps the standalone app working and adds the first real AUv3 plugin architecture work:
+The repository also includes the first real AUv3 plugin architecture work:
 
 - a shared AU parameter contract
 - a macOS AUv3 extension target
@@ -38,7 +32,7 @@ This branch keeps the standalone app working and adds the first real AUv3 plugin
 - a minimal custom plugin UI
 - a working `Output Gain` vertical slice from host automation to DSP
 
-This is the more important branch if your goal is learning plugin architecture.
+If your goal is learning plugin architecture, the most important parts of the project are the shared parameter contract and the AUv3 extension.
 
 ## What Is Working Today
 
@@ -55,7 +49,7 @@ The standalone app still works as a normal macOS prototype and currently support
 
 ### AUv3 plugin
 
-On the AUv3 branch, the plugin currently supports:
+The current AUv3 implementation supports:
 
 - loading as an audio effect in Ableton Live 12+
 - exposing eight AU parameters to the host
@@ -187,7 +181,7 @@ That order moves from easiest concepts to the more advanced AUv3 topics.
 
 ## What Has Been Completed So Far
 
-### On `main`
+### Standalone prototype milestone
 
 - AudioKit dependency added
 - local AudioKit package wiring updated
@@ -197,7 +191,7 @@ That order moves from easiest concepts to the more advanced AUv3 topics.
 - delay implemented
 - low-pass filter implemented
 
-### On `phase1-shared-parameter-contract`
+### AUv3 foundation milestone
 
 - shared AU parameter contract extracted
 - contract tests added
@@ -226,4 +220,3 @@ If you are studying this project, the most natural next topics are:
 - add AU-side bypass behavior
 - move delay and filter parameters into the AU render architecture
 - decide how much DSP should stay in AudioKit graph code versus lower-level AU render code
-

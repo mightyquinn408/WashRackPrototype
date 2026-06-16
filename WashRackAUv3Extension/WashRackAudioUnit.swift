@@ -1,5 +1,4 @@
 import AVFoundation
-import Synchronization
 
 public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
     private static let outputGainStateKey = "com.QuinnTech.WashRack.outputGain"
@@ -11,14 +10,11 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
     private let outputBus: AUAudioUnitBus
     private var inputBusArray: AUAudioUnitBusArray!
     private var outputBusArray: AUAudioUnitBusArray!
-    private let desiredOutputGainDecibelsBits: Atomic<UInt32>
-    private let currentOutputGainUIDisplayDecibelsBits: Atomic<UInt32>
-    private let outputGainBaseValueGeneration: Atomic<UInt32>
+    private let outputGainControlState: WashRackOutputGainControlState
     private var currentOutputGainLinear: AUValue
     private var targetOutputGainLinear: AUValue
     private var outputGainLinearStep: AUValue
     private var outputGainRampSamplesRemaining: AUAudioFrameCount
-    private var consumedOutputGainBaseValueGeneration: UInt32
 
     @objc public override init(
         componentDescription: AudioComponentDescription,
@@ -43,14 +39,11 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         outputBus = try AUAudioUnitBus(format: defaultFormat)
         inputBus.maximumChannelCount = 2
         outputBus.maximumChannelCount = 2
-        desiredOutputGainDecibelsBits = Atomic(defaultGainDecibels.bitPattern)
-        currentOutputGainUIDisplayDecibelsBits = Atomic(defaultGainDecibels.bitPattern)
-        outputGainBaseValueGeneration = Atomic(0)
+        outputGainControlState = WashRackOutputGainControlState(defaultDecibels: defaultGainDecibels)
         currentOutputGainLinear = defaultLinearGain
         targetOutputGainLinear = defaultLinearGain
         outputGainLinearStep = 0
         outputGainRampSamplesRemaining = 0
-        consumedOutputGainBaseValueGeneration = 0
 
         try super.init(componentDescription: componentDescription, options: options)
 
@@ -64,8 +57,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                 return
             }
 
-            self.storeDesiredOutputGainDecibels(value)
-            self.signalOutputGainBaseValueChange()
+            self.outputGainControlState.noteBaseValueChange(value)
         }
 
         washRackParameterTree.implementorValueProvider = { [weak self] parameter in
@@ -206,7 +198,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
 
             if !handledOutputGainEvent,
                self.consumePendingOutputGainBaseValueChange() {
-                let desiredOutputGainDecibels = self.loadDesiredOutputGainDecibels()
+                let desiredOutputGainDecibels = self.outputGainControlState.desiredBaseDecibels()
                 let desiredLinearGain = Self.linearGain(fromDecibels: desiredOutputGainDecibels)
 
                 if Self.linearGainValuesDiffer(desiredLinearGain, self.targetOutputGainLinear) {
@@ -229,26 +221,8 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         }
     }
 
-    private func loadDesiredOutputGainDecibels() -> AUValue {
-        AUValue(bitPattern: desiredOutputGainDecibelsBits.load(ordering: .relaxed))
-    }
-
-    private func storeDesiredOutputGainDecibels(_ value: AUValue) {
-        desiredOutputGainDecibelsBits.store(value.bitPattern, ordering: .relaxed)
-    }
-
-    private func signalOutputGainBaseValueChange() {
-        outputGainBaseValueGeneration.wrappingAdd(1, ordering: .relaxed)
-    }
-
     private func consumePendingOutputGainBaseValueChange() -> Bool {
-        let generation = outputGainBaseValueGeneration.load(ordering: .relaxed)
-        guard generation != consumedOutputGainBaseValueGeneration else {
-            return false
-        }
-
-        consumedOutputGainBaseValueGeneration = generation
-        return true
+        outputGainControlState.consumePendingBaseValueChange() != nil
     }
 
     private func restoredOutputGain(from state: [String: Any]?) -> AUValue? {
@@ -265,20 +239,18 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
 
     private func syncOutputGainRenderState(fromDecibels decibels: AUValue) {
         let linearGain = Self.linearGain(fromDecibels: decibels)
-        storeDesiredOutputGainDecibels(decibels)
-        currentOutputGainUIDisplayDecibelsBits.store(decibels.bitPattern, ordering: .relaxed)
+        outputGainControlState.syncAllStates(to: decibels)
         currentOutputGainLinear = linearGain
         targetOutputGainLinear = linearGain
         outputGainLinearStep = 0
         outputGainRampSamplesRemaining = 0
-        consumedOutputGainBaseValueGeneration = outputGainBaseValueGeneration.load(ordering: .relaxed)
     }
 
     private func setImmediateOutputGain(toDecibels decibels: AUValue) {
         let linearGain = Self.linearGain(fromDecibels: decibels)
         targetOutputGainLinear = linearGain
         currentOutputGainLinear = linearGain
-        currentOutputGainUIDisplayDecibelsBits.store(decibels.bitPattern, ordering: .relaxed)
+        outputGainControlState.updateHostVisibleDecibels(decibels)
         outputGainLinearStep = 0
         outputGainRampSamplesRemaining = 0
     }
@@ -340,9 +312,8 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         currentOutputGainLinear = gain
         outputGainLinearStep = step
         outputGainRampSamplesRemaining = AUAudioFrameCount(remainingRampSamples)
-        currentOutputGainUIDisplayDecibelsBits.store(
-            Self.decibels(fromLinearGain: currentOutputGainLinear).bitPattern,
-            ordering: .relaxed
+        outputGainControlState.updateHostVisibleDecibels(
+            Self.decibels(fromLinearGain: currentOutputGainLinear)
         )
     }
 
@@ -361,11 +332,11 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
 
     @MainActor
     var outputGainUIDisplayDecibels: AUValue {
-        AUValue(bitPattern: currentOutputGainUIDisplayDecibelsBits.load(ordering: .relaxed))
+        outputGainControlState.hostVisibleDecibels()
     }
 
     private func outputGainHostVisibleValue() -> AUValue {
-        AUValue(bitPattern: currentOutputGainUIDisplayDecibelsBits.load(ordering: .relaxed))
+        outputGainControlState.hostVisibleDecibels()
     }
 
     private static func linearGainValuesDiffer(_ lhs: AUValue, _ rhs: AUValue) -> Bool {
