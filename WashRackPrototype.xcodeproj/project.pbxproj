@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		6B1977C82FD23EB4005E1984 /* AudioKit in Frameworks */ = {isa = PBXBuildFile; productRef = 6B1977C72FD23EB4005E1984 /* AudioKit */; };
+		6B1977D12FD23F00005E1984 /* WashRackAUv3Extension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 6B1977D22FD23F00005E1984 /* WashRackAUv3Extension.appex */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -25,12 +26,34 @@
 			remoteGlobalIDString = 6B1977972FD23B29005E1984;
 			remoteInfo = WashRackPrototype;
 		};
+		6B1977DA2FD23F00005E1984 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6B1977902FD23B29005E1984 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6B1977D62FD23F00005E1984;
+			remoteInfo = WashRackAUv3Extension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		6B1977D52FD23F00005E1984 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				6B1977D12FD23F00005E1984 /* WashRackAUv3Extension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		6B1977982FD23B29005E1984 /* WashRackPrototype.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WashRackPrototype.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B1977A52FD23B2B005E1984 /* WashRackPrototypeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WashRackPrototypeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B1977AF2FD23B2B005E1984 /* WashRackPrototypeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WashRackPrototypeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6B1977D22FD23F00005E1984 /* WashRackAUv3Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = WashRackAUv3Extension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -47,6 +70,21 @@
 		6B1977B22FD23B2B005E1984 /* WashRackPrototypeUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = WashRackPrototypeUITests;
+			sourceTree = "<group>";
+		};
+		6B1977D32FD23F00005E1984 /* WashRackAUv3Extension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WashRackAUv3Extension;
+			sourceTree = "<group>";
+		};
+		6B1977D42FD23F00005E1984 /* WashRackShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WashRackShared;
+			sourceTree = "<group>";
+		};
+		6B1977DF2FD23F00005E1984 /* WashRackProjectSupport */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WashRackProjectSupport;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -74,6 +112,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		6B1977D72FD23F00005E1984 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -83,6 +128,9 @@
 				6B19779A2FD23B29005E1984 /* WashRackPrototype */,
 				6B1977A82FD23B2B005E1984 /* WashRackPrototypeTests */,
 				6B1977B22FD23B2B005E1984 /* WashRackPrototypeUITests */,
+				6B1977D32FD23F00005E1984 /* WashRackAUv3Extension */,
+				6B1977D42FD23F00005E1984 /* WashRackShared */,
+				6B1977DF2FD23F00005E1984 /* WashRackProjectSupport */,
 				6B1977C32FD23CDA005E1984 /* Frameworks */,
 				6B1977992FD23B29005E1984 /* Products */,
 			);
@@ -94,6 +142,7 @@
 				6B1977982FD23B29005E1984 /* WashRackPrototype.app */,
 				6B1977A52FD23B2B005E1984 /* WashRackPrototypeTests.xctest */,
 				6B1977AF2FD23B2B005E1984 /* WashRackPrototypeUITests.xctest */,
+				6B1977D22FD23F00005E1984 /* WashRackAUv3Extension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -115,13 +164,16 @@
 				6B1977942FD23B29005E1984 /* Sources */,
 				6B1977952FD23B29005E1984 /* Frameworks */,
 				6B1977962FD23B29005E1984 /* Resources */,
+				6B1977D52FD23F00005E1984 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				6B1977DB2FD23F00005E1984 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				6B19779A2FD23B29005E1984 /* WashRackPrototype */,
+				6B1977D42FD23F00005E1984 /* WashRackShared */,
 			);
 			name = WashRackPrototype;
 			packageProductDependencies = (
@@ -177,6 +229,29 @@
 			productReference = 6B1977AF2FD23B2B005E1984 /* WashRackPrototypeUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		6B1977D62FD23F00005E1984 /* WashRackAUv3Extension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6B1977DE2FD23F00005E1984 /* Build configuration list for PBXNativeTarget "WashRackAUv3Extension" */;
+			buildPhases = (
+				6B1977D92FD23F00005E1984 /* Sources */,
+				6B1977D72FD23F00005E1984 /* Frameworks */,
+				6B1977D82FD23F00005E1984 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				6B1977D32FD23F00005E1984 /* WashRackAUv3Extension */,
+				6B1977D42FD23F00005E1984 /* WashRackShared */,
+			);
+			name = WashRackAUv3Extension;
+			packageProductDependencies = (
+			);
+			productName = WashRackAUv3Extension;
+			productReference = 6B1977D22FD23F00005E1984 /* WashRackAUv3Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -197,6 +272,9 @@
 					6B1977AE2FD23B2B005E1984 = {
 						CreatedOnToolsVersion = 26.5;
 						TestTargetID = 6B1977972FD23B29005E1984;
+					};
+					6B1977D62FD23F00005E1984 = {
+						CreatedOnToolsVersion = 26.5;
 					};
 				};
 			};
@@ -220,6 +298,7 @@
 				6B1977972FD23B29005E1984 /* WashRackPrototype */,
 				6B1977A42FD23B2B005E1984 /* WashRackPrototypeTests */,
 				6B1977AE2FD23B2B005E1984 /* WashRackPrototypeUITests */,
+				6B1977D62FD23F00005E1984 /* WashRackAUv3Extension */,
 			);
 		};
 /* End PBXProject section */
@@ -240,6 +319,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		6B1977AD2FD23B2B005E1984 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6B1977D82FD23F00005E1984 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -270,6 +356,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		6B1977D92FD23F00005E1984 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -282,6 +375,11 @@
 			isa = PBXTargetDependency;
 			target = 6B1977972FD23B29005E1984 /* WashRackPrototype */;
 			targetProxy = 6B1977B02FD23B2B005E1984 /* PBXContainerItemProxy */;
+		};
+		6B1977DB2FD23F00005E1984 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6B1977D62FD23F00005E1984 /* WashRackAUv3Extension */;
+			targetProxy = 6B1977DA2FD23F00005E1984 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -550,6 +648,68 @@
 			};
 			name = Release;
 		};
+		6B1977DC2FD23F00005E1984 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = JSLYSSKG9L;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "WashRackProjectSupport/WashRackAUv3Extension-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.QuinnTech.WashRackPrototype.WashRackAUv3Extension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		6B1977DD2FD23F00005E1984 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = JSLYSSKG9L;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "WashRackProjectSupport/WashRackAUv3Extension-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.QuinnTech.WashRackPrototype.WashRackAUv3Extension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -585,6 +745,15 @@
 			buildConfigurations = (
 				6B1977C02FD23B2B005E1984 /* Debug */,
 				6B1977C12FD23B2B005E1984 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		6B1977DE2FD23F00005E1984 /* Build configuration list for PBXNativeTarget "WashRackAUv3Extension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6B1977DC2FD23F00005E1984 /* Debug */,
+				6B1977DD2FD23F00005E1984 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
