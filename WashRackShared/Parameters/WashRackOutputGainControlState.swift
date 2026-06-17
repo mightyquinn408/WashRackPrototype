@@ -22,13 +22,18 @@ final class WashRackOutputGainControlState: @unchecked Sendable {
         AUValue(bitPattern: hostVisibleDecibelsBits.load(ordering: .relaxed))
     }
 
-    func noteBaseValueChange(_ decibels: AUValue) {
+    func noteBaseValueChange(_ decibels: AUValue, updateVisibleValue: Bool) {
         desiredBaseDecibelsBits.store(decibels.bitPattern, ordering: .relaxed)
-        baseValueGeneration.wrappingAdd(1, ordering: .relaxed)
+
+        if updateVisibleValue {
+            hostVisibleDecibelsBits.store(decibels.bitPattern, ordering: .relaxed)
+        }
+
+        baseValueGeneration.wrappingAdd(1, ordering: .releasing)
     }
 
     func consumePendingBaseValueChange() -> AUValue? {
-        let generation = baseValueGeneration.load(ordering: .relaxed)
+        let generation = baseValueGeneration.load(ordering: .acquiring)
         guard generation != consumedBaseValueGeneration else {
             return nil
         }

@@ -2,6 +2,7 @@ import AVFoundation
 
 public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
     private static let outputGainStateKey = "com.QuinnTech.WashRack.outputGain"
+    private static let parameterStateKey = "com.QuinnTech.WashRack.parameters"
     private static let outputGainSmoothingTimeSeconds: AUValue = 0.01
 
     private let washRackParameterTree: AUParameterTree
@@ -10,6 +11,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
     private let outputBus: AUAudioUnitBus
     private var inputBusArray: AUAudioUnitBusArray!
     private var outputBusArray: AUAudioUnitBusArray!
+    private let hostParameterValueStore: WashRackHostParameterValueStore
     private let outputGainControlState: WashRackOutputGainControlState
     private var currentOutputGainLinear: AUValue
     private var targetOutputGainLinear: AUValue
@@ -39,6 +41,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         outputBus = try AUAudioUnitBus(format: defaultFormat)
         inputBus.maximumChannelCount = 2
         outputBus.maximumChannelCount = 2
+        hostParameterValueStore = WashRackHostParameterValueStore()
         outputGainControlState = WashRackOutputGainControlState(defaultDecibels: defaultGainDecibels)
         currentOutputGainLinear = defaultLinearGain
         targetOutputGainLinear = defaultLinearGain
@@ -53,11 +56,16 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         maximumFramesToRender = 512
 
         washRackParameterTree.implementorValueObserver = { [weak self] parameter, value in
-            guard let self, parameter.address == self.outputGainParameter.address else {
+            guard let self,
+                  let address = WashRackParameterAddress(rawValue: parameter.address) else {
                 return
             }
 
-            self.outputGainControlState.noteBaseValueChange(value)
+            self.hostParameterValueStore.setValue(value, for: address)
+
+            if address == .outputGain {
+                self.outputGainControlState.noteBaseValueChange(value, updateVisibleValue: true)
+            }
         }
 
         washRackParameterTree.implementorValueProvider = { [weak self] parameter in
@@ -73,7 +81,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                 return 0
             }
 
-            return WashRackParameterSpec.spec(for: address).defaultValue
+            return self.hostParameterValueStore.value(for: address)
         }
 
         syncOutputGainStateFromParameter()
@@ -114,17 +122,31 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
     public override var fullState: [String: Any]? {
         get {
             var state = super.fullState ?? [:]
-            state[Self.outputGainStateKey] = NSNumber(value: outputGainParameter.value)
+            state[Self.parameterStateKey] = hostParameterValueStore.snapshotByIdentifier()
+            state[Self.outputGainStateKey] = NSNumber(value: hostParameterValueStore.value(for: .outputGain))
             return state
         }
         set {
             super.fullState = newValue
 
-            if let restoredValue = restoredOutputGain(from: newValue) {
-                outputGainParameter.setValue(restoredValue, originator: nil)
+            let restoredValues = restoredParameterValues(from: newValue)
+
+            if let restoredOutputGain = restoredValues[.outputGain] {
+                syncOutputGainRenderState(fromDecibels: restoredOutputGain)
             }
 
-            syncOutputGainStateFromParameter()
+            for spec in WashRackParameterSpec.all {
+                guard let restoredValue = restoredValues[spec.address],
+                      let parameter = washRackParameterTree.parameter(withAddress: spec.address.rawValue) else {
+                    continue
+                }
+
+                parameter.setValue(restoredValue, originator: nil)
+            }
+
+            if restoredValues[.outputGain] == nil {
+                syncOutputGainStateFromParameter()
+            }
         }
     }
 
@@ -197,8 +219,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
             }
 
             if !handledOutputGainEvent,
-               self.consumePendingOutputGainBaseValueChange() {
-                let desiredOutputGainDecibels = self.outputGainControlState.desiredBaseDecibels()
+               let desiredOutputGainDecibels = self.consumePendingOutputGainBaseValueChange() {
                 let desiredLinearGain = Self.linearGain(fromDecibels: desiredOutputGainDecibels)
 
                 if Self.linearGainValuesDiffer(desiredLinearGain, self.targetOutputGainLinear) {
@@ -221,20 +242,33 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         }
     }
 
-    private func consumePendingOutputGainBaseValueChange() -> Bool {
-        outputGainControlState.consumePendingBaseValueChange() != nil
+    private func consumePendingOutputGainBaseValueChange() -> AUValue? {
+        outputGainControlState.consumePendingBaseValueChange()
     }
 
-    private func restoredOutputGain(from state: [String: Any]?) -> AUValue? {
-        guard let number = state?[Self.outputGainStateKey] as? NSNumber else {
-            return nil
+    private func restoredParameterValues(from state: [String: Any]?) -> [WashRackParameterAddress: AUValue] {
+        guard let state else {
+            return [:]
         }
 
-        return number.floatValue
+        var restoredValues: [WashRackParameterAddress: AUValue] = [:]
+
+        if let parameterSnapshot = state[Self.parameterStateKey] as? [String: Any] {
+            restoredValues = hostParameterValueStore.applySnapshotByIdentifier(parameterSnapshot)
+        }
+
+        if restoredValues[.outputGain] == nil,
+           let legacyOutputGain = state[Self.outputGainStateKey] as? NSNumber {
+            let restoredOutputGain = legacyOutputGain.floatValue
+            hostParameterValueStore.setValue(restoredOutputGain, for: .outputGain)
+            restoredValues[.outputGain] = restoredOutputGain
+        }
+
+        return restoredValues
     }
 
     private func syncOutputGainStateFromParameter() {
-        syncOutputGainRenderState(fromDecibels: outputGainParameter.value)
+        syncOutputGainRenderState(fromDecibels: hostParameterValueStore.value(for: .outputGain))
     }
 
     private func syncOutputGainRenderState(fromDecibels decibels: AUValue) {
