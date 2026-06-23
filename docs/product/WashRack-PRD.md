@@ -72,13 +72,15 @@ At the product level, the expected feel is:
 - optional delay adds motion and depth
 - enable/bypass behavior makes insertion easy in real sessions
 
-Current Alpha topology proof:
+Current Alpha AU slice:
 
 - `effectEnabled = 0` means dry anchor straight to the output stage
 - `effectEnabled = 1` means dry anchor plus a separate wet movement layer
 - `dryWetMix` controls wet-layer amount under the retained dry anchor
 - `dryWetMix` is not a full dry/wet crossfade that fades the dry path away
-- the first AU proof uses a mirrored wet placeholder before filter, reverb, and delay are made product-complete
+- the wet layer currently uses a mirrored-input placeholder with low-pass filter movement before reverb and delay are made product-complete
+- `lowPassCutoff` and `lowPassResonance` act on the wet layer only; the dry anchor remains untouched
+- the minimal AU editor exposes `Effect Enabled`, `Dry/Wet Mix`, `Low-Pass Cutoff`, `Low-Pass Resonance`, and `Output Gain` for in-host validation
 
 ## Core Features
 
@@ -237,13 +239,13 @@ Alpha outcome:
 
 Beta should focus on product fit, polish, and confidence:
 
-1. add filter movement to the wet layer
-2. add wash reverb behavior to the wet layer
-3. add delay movement as a secondary wet-layer element
-4. tune gain staging and perceived loudness across transitions
-5. improve the custom UI for production usability
-6. expand test coverage for state restore and parameter behavior
-7. evaluate whether DSP should consolidate further into a shared core
+1. add wash reverb behavior to the wet layer
+2. add delay movement as a secondary wet-layer element
+3. tune gain staging and perceived loudness across transitions
+4. improve the custom UI for production usability
+5. expand test coverage for state restore and parameter behavior
+6. evaluate whether DSP should consolidate further into a shared core
+7. decide when the standalone graph should align with the AU architecture
 8. run repeated host validation passes in Logic and Ableton on real projects
 
 Beta outcome:

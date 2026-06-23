@@ -44,12 +44,12 @@ public final class WashRackAudioUnitViewController: AUViewController, AUAudioUni
 
     public override func loadView() {
         audioUnitViewControllerLogger.notice("loadView controller=\(self.controllerIdentifier, privacy: .public)")
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 140))
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 340))
     }
 
     public override func viewDidLoad() {
         super.viewDidLoad()
-        preferredContentSize = NSSize(width: 360, height: 140)
+        preferredContentSize = NSSize(width: 420, height: 340)
         audioUnitViewControllerLogger.notice(
             "viewDidLoad controller=\(self.controllerIdentifier, privacy: .public) audioUnitNil=\(self.audioUnit == nil, privacy: .public) lastCreatedNil=\(Self.lastCreatedAudioUnit == nil, privacy: .public) hostExists=\(self.hostingView != nil, privacy: .public)"
         )
@@ -57,7 +57,7 @@ public final class WashRackAudioUnitViewController: AUViewController, AUAudioUni
             audioUnitViewControllerLogger.notice("viewDidLoad noAudioUnit controller=\(self.controllerIdentifier, privacy: .public)")
             return
         }
-        syncOutputGainDisplayFromAudioUnit()
+        syncParametersFromAudioUnit()
     }
 
     public override func viewWillAppear() {
@@ -71,7 +71,7 @@ public final class WashRackAudioUnitViewController: AUViewController, AUAudioUni
             return
         }
 
-        syncOutputGainDisplayFromAudioUnit()
+        syncParametersFromAudioUnit()
     }
 
     public override func viewDidAppear() {
@@ -140,7 +140,7 @@ public final class WashRackAudioUnitViewController: AUViewController, AUAudioUni
         )
 
         if hostingView != nil, self.audioUnit === audioUnit {
-            syncOutputGainDisplayFromAudioUnit()
+            syncParametersFromAudioUnit()
             return
         }
 
@@ -169,7 +169,7 @@ public final class WashRackAudioUnitViewController: AUViewController, AUAudioUni
 
         self.hostingView = hostingView
         self.hostingViewConstraints = constraints
-        syncOutputGainDisplayFromAudioUnit()
+        syncParametersFromAudioUnit()
     }
 
     private func teardownHostingView() {
@@ -187,7 +187,7 @@ public final class WashRackAudioUnitViewController: AUViewController, AUAudioUni
 
         let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.syncOutputGainDisplayFromAudioUnit()
+                self?.syncParametersFromAudioUnit()
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -199,11 +199,24 @@ public final class WashRackAudioUnitViewController: AUViewController, AUAudioUni
         parameterRefreshTimer = nil
     }
 
-    private func syncOutputGainDisplayFromAudioUnit() {
+    private func syncParametersFromAudioUnit() {
+        observableParameterTree?.syncFromParameters()
         guard let washRackAudioUnit = audioUnit as? WashRackAudioUnit,
               let observableParameterTree else {
             return
         }
+
+        let effectEnabledParameter: ObservableAUParameter = observableParameterTree.effectEnabled
+        effectEnabledParameter.syncFromHostDisplayValue(washRackAudioUnit.effectEnabledUIDisplayValue)
+
+        let dryWetMixParameter: ObservableAUParameter = observableParameterTree.dryWetMix
+        dryWetMixParameter.syncFromHostDisplayValue(washRackAudioUnit.dryWetMixUIDisplayPercent)
+
+        let lowPassCutoffParameter: ObservableAUParameter = observableParameterTree.lowPassCutoff
+        lowPassCutoffParameter.syncFromHostDisplayValue(washRackAudioUnit.lowPassCutoffUIDisplayHertz)
+
+        let lowPassResonanceParameter: ObservableAUParameter = observableParameterTree.lowPassResonance
+        lowPassResonanceParameter.syncFromHostDisplayValue(washRackAudioUnit.lowPassResonanceUIDisplayDecibels)
 
         let outputGainParameter: ObservableAUParameter = observableParameterTree.outputGain
         outputGainParameter.syncFromHostDisplayValue(washRackAudioUnit.outputGainUIDisplayDecibels)

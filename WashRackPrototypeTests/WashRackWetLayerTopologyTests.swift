@@ -36,36 +36,45 @@ struct WashRackWetLayerTopologyTests {
     @Test
     func dryWetMixZeroProducesDryAnchorOnlyScale() {
         let wetLayerGain = WashRackWetLayerMixing.wetLayerGain(fromDryWetMixPercent: 0)
-        let topologyScale = WashRackWetLayerMixing.topologyScaleFactor(
-            fromWetLayerGain: wetLayerGain,
-            effectEnabled: true
+        let mixedSample = WashRackWetLayerMixing.mixedSample(
+            drySample: 0.5,
+            wetSample: 0.5,
+            wetLayerGain: wetLayerGain,
+            effectEnabled: true,
+            outputGainLinear: 1
         )
 
         #expect(wetLayerGain == 0)
-        #expect(topologyScale == 1)
+        #expect(mixedSample == 0.5)
     }
 
     @Test
     func effectDisabledIgnoresWetLayerContribution() {
         let wetLayerGain = WashRackWetLayerMixing.wetLayerGain(fromDryWetMixPercent: 100)
-        let topologyScale = WashRackWetLayerMixing.topologyScaleFactor(
-            fromWetLayerGain: wetLayerGain,
-            effectEnabled: false
+        let mixedSample = WashRackWetLayerMixing.mixedSample(
+            drySample: 0.5,
+            wetSample: 0.25,
+            wetLayerGain: wetLayerGain,
+            effectEnabled: false,
+            outputGainLinear: 1
         )
 
         #expect(wetLayerGain == 1)
-        #expect(topologyScale == 1)
+        #expect(mixedSample == 0.5)
     }
 
     @Test
     func dryWetMixHundredPercentProducesUncompensatedDryPlusWetScale() {
         let wetLayerGain = WashRackWetLayerMixing.wetLayerGain(fromDryWetMixPercent: 100)
-        let topologyScale = WashRackWetLayerMixing.topologyScaleFactor(
-            fromWetLayerGain: wetLayerGain,
-            effectEnabled: true
+        let mixedSample = WashRackWetLayerMixing.mixedSample(
+            drySample: 0.5,
+            wetSample: 0.5,
+            wetLayerGain: wetLayerGain,
+            effectEnabled: true,
+            outputGainLinear: 1
         )
 
         #expect(wetLayerGain == 1)
-        #expect(topologyScale == 2)
+        #expect(mixedSample == 1)
     }
 }
