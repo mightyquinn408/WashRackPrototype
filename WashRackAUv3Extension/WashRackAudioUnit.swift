@@ -4,15 +4,23 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
     private static let outputGainStateKey = "com.QuinnTech.WashRack.outputGain"
     private static let parameterStateKey = "com.QuinnTech.WashRack.parameters"
     private static let outputGainSmoothingTimeSeconds: AUValue = 0.01
+    private static let wetLayerMixSmoothingTimeSeconds: AUValue = 0.01
 
     private let washRackParameterTree: AUParameterTree
+    private let dryWetMixParameter: AUParameter
+    private let effectEnabledParameter: AUParameter
     private let outputGainParameter: AUParameter
     private let inputBus: AUAudioUnitBus
     private let outputBus: AUAudioUnitBus
     private var inputBusArray: AUAudioUnitBusArray!
     private var outputBusArray: AUAudioUnitBusArray!
     private let hostParameterValueStore: WashRackHostParameterValueStore
+    private let wetLayerControlState: WashRackWetLayerControlState
     private let outputGainControlState: WashRackOutputGainControlState
+    private var currentWetLayerGain: AUValue
+    private var targetWetLayerGain: AUValue
+    private var wetLayerGainStep: AUValue
+    private var wetLayerGainRampSamplesRemaining: AUAudioFrameCount
     private var currentOutputGainLinear: AUValue
     private var targetOutputGainLinear: AUValue
     private var outputGainLinearStep: AUValue
@@ -24,6 +32,22 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
     ) throws {
         let defaultFormat = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 2)!
         washRackParameterTree = WashRackParameterTreeFactory.makeParameterTree()
+        guard let dryWetMixParameter = washRackParameterTree.parameter(
+            withAddress: WashRackParameterAddress.dryWetMix.rawValue
+        ) else {
+            throw NSError(
+                domain: NSOSStatusErrorDomain,
+                code: Int(kAudioUnitErr_InvalidParameter)
+            )
+        }
+        guard let effectEnabledParameter = washRackParameterTree.parameter(
+            withAddress: WashRackParameterAddress.effectEnabled.rawValue
+        ) else {
+            throw NSError(
+                domain: NSOSStatusErrorDomain,
+                code: Int(kAudioUnitErr_InvalidParameter)
+            )
+        }
         guard let outputGainParameter = washRackParameterTree.parameter(
             withAddress: WashRackParameterAddress.outputGain.rawValue
         ) else {
@@ -35,14 +59,29 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
 
         let defaultGainDecibels = outputGainParameter.value
         let defaultLinearGain = Self.linearGain(fromDecibels: defaultGainDecibels)
+        let defaultDryWetMix = dryWetMixParameter.value
+        let defaultEffectEnabled = effectEnabledParameter.value
+        let defaultWetLayerGain = WashRackWetLayerMixing.wetLayerGain(
+            fromDryWetMixPercent: defaultDryWetMix
+        )
 
+        self.dryWetMixParameter = dryWetMixParameter
+        self.effectEnabledParameter = effectEnabledParameter
         self.outputGainParameter = outputGainParameter
         inputBus = try AUAudioUnitBus(format: defaultFormat)
         outputBus = try AUAudioUnitBus(format: defaultFormat)
         inputBus.maximumChannelCount = 2
         outputBus.maximumChannelCount = 2
         hostParameterValueStore = WashRackHostParameterValueStore()
+        wetLayerControlState = WashRackWetLayerControlState(
+            defaultDryWetMix: defaultDryWetMix,
+            defaultEffectEnabled: defaultEffectEnabled
+        )
         outputGainControlState = WashRackOutputGainControlState(defaultDecibels: defaultGainDecibels)
+        currentWetLayerGain = defaultWetLayerGain
+        targetWetLayerGain = defaultWetLayerGain
+        wetLayerGainStep = 0
+        wetLayerGainRampSamplesRemaining = 0
         currentOutputGainLinear = defaultLinearGain
         targetOutputGainLinear = defaultLinearGain
         outputGainLinearStep = 0
@@ -63,7 +102,11 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
 
             self.hostParameterValueStore.setValue(value, for: address)
 
-            if address == .outputGain {
+            if address == .dryWetMix {
+                self.wetLayerControlState.updateDryWetMix(value)
+            } else if address == .effectEnabled {
+                self.wetLayerControlState.updateEffectEnabled(value)
+            } else if address == .outputGain {
                 self.outputGainControlState.noteBaseValueChange(value, updateVisibleValue: true)
             }
         }
@@ -85,6 +128,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         }
 
         syncOutputGainStateFromParameter()
+        syncWetLayerStateFromParameter()
     }
 
     public override var inputBusses: AUAudioUnitBusArray {
@@ -116,6 +160,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         }
 
         syncOutputGainStateFromParameter()
+        syncWetLayerStateFromParameter()
         try super.allocateRenderResources()
     }
 
@@ -147,6 +192,8 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
             if restoredValues[.outputGain] == nil {
                 syncOutputGainStateFromParameter()
             }
+
+            syncWetLayerStateFromParameter()
         }
     }
 
@@ -177,33 +224,53 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
             let outputBuffers = UnsafeMutableAudioBufferListPointer(outputData)
             let totalFrames = Int(frameCount)
             let bufferStartSampleTime = AUEventSampleTime(timestamp.pointee.mSampleTime)
+            let desiredWetLayerGain = WashRackWetLayerMixing.wetLayerGain(
+                fromDryWetMixPercent: self.wetLayerControlState.dryWetMix()
+            )
+            var effectEnabled = self.wetLayerControlState.effectEnabled() >= 0.5
             var renderedFrames = 0
             var handledOutputGainEvent = false
             var event = UnsafeMutablePointer(mutating: realtimeEventListHead)
+
+            if Self.valuesDiffer(desiredWetLayerGain, self.targetWetLayerGain) {
+                self.beginWetLayerGainRamp(
+                    toWetLayerGain: desiredWetLayerGain,
+                    durationSamples: self.wetLayerMixSmoothingSampleCount()
+                )
+            }
 
             while let currentEvent = event {
                 let nextEvent = currentEvent.pointee.head.next
 
                 if currentEvent.pointee.head.eventType.rawValue == 1 || currentEvent.pointee.head.eventType.rawValue == 2 {
                     let parameterEvent = currentEvent.pointee.parameter
+                    let isRelevantParameter = parameterEvent.parameterAddress == self.outputGainParameter.address
+                        || parameterEvent.parameterAddress == self.dryWetMixParameter.address
+                        || parameterEvent.parameterAddress == self.effectEnabledParameter.address
+
+                    guard isRelevantParameter else {
+                        event = nextEvent
+                        continue
+                    }
+
+                    let eventFrame = Self.frameOffset(
+                        for: parameterEvent.eventSampleTime,
+                        bufferStartSampleTime: bufferStartSampleTime,
+                        totalFrames: totalFrames
+                    )
+
+                    if eventFrame > renderedFrames {
+                        self.applyTopologyAndOutputGain(
+                            to: outputBuffers,
+                            startFrame: renderedFrames,
+                            frameCount: eventFrame - renderedFrames,
+                            effectEnabled: effectEnabled
+                        )
+                        renderedFrames = eventFrame
+                    }
 
                     if parameterEvent.parameterAddress == self.outputGainParameter.address {
                         handledOutputGainEvent = true
-                        let eventFrame = Self.frameOffset(
-                            for: parameterEvent.eventSampleTime,
-                            bufferStartSampleTime: bufferStartSampleTime,
-                            totalFrames: totalFrames
-                        )
-
-                        if eventFrame > renderedFrames {
-                            self.applyOutputGain(
-                                to: outputBuffers,
-                                startFrame: renderedFrames,
-                                frameCount: eventFrame - renderedFrames
-                            )
-                            renderedFrames = eventFrame
-                        }
-
                         if parameterEvent.rampDurationSampleFrames > 0 {
                             self.beginOutputGainRamp(
                                 toDecibels: parameterEvent.value,
@@ -212,6 +279,18 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                         } else {
                             self.setImmediateOutputGain(toDecibels: parameterEvent.value)
                         }
+                    } else if parameterEvent.parameterAddress == self.dryWetMixParameter.address {
+                        if parameterEvent.rampDurationSampleFrames > 0 {
+                            self.beginWetLayerGainRamp(
+                                toDryWetMixPercent: parameterEvent.value,
+                                durationSamples: max(1, parameterEvent.rampDurationSampleFrames)
+                            )
+                        } else {
+                            self.setImmediateWetLayerGain(toDryWetMixPercent: parameterEvent.value)
+                        }
+                    } else if parameterEvent.parameterAddress == self.effectEnabledParameter.address {
+                        self.wetLayerControlState.updateEffectEnabled(parameterEvent.value)
+                        effectEnabled = parameterEvent.value >= 0.5
                     }
                 }
 
@@ -222,7 +301,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                let desiredOutputGainDecibels = self.consumePendingOutputGainBaseValueChange() {
                 let desiredLinearGain = Self.linearGain(fromDecibels: desiredOutputGainDecibels)
 
-                if Self.linearGainValuesDiffer(desiredLinearGain, self.targetOutputGainLinear) {
+                if Self.valuesDiffer(desiredLinearGain, self.targetOutputGainLinear) {
                     self.beginOutputGainRamp(
                         toLinearGain: desiredLinearGain,
                         durationSamples: self.outputGainSmoothingSampleCount()
@@ -231,10 +310,11 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
             }
 
             if renderedFrames < totalFrames {
-                self.applyOutputGain(
+                self.applyTopologyAndOutputGain(
                     to: outputBuffers,
                     startFrame: renderedFrames,
-                    frameCount: totalFrames - renderedFrames
+                    frameCount: totalFrames - renderedFrames,
+                    effectEnabled: effectEnabled
                 )
             }
 
@@ -271,6 +351,22 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         syncOutputGainRenderState(fromDecibels: hostParameterValueStore.value(for: .outputGain))
     }
 
+    private func syncWetLayerStateFromParameter() {
+        syncWetLayerRenderState(
+            dryWetMix: hostParameterValueStore.value(for: .dryWetMix),
+            effectEnabled: hostParameterValueStore.value(for: .effectEnabled)
+        )
+    }
+
+    private func syncWetLayerRenderState(dryWetMix: AUValue, effectEnabled: AUValue) {
+        let wetLayerGain = WashRackWetLayerMixing.wetLayerGain(fromDryWetMixPercent: dryWetMix)
+        wetLayerControlState.syncAllStates(dryWetMix: dryWetMix, effectEnabled: effectEnabled)
+        currentWetLayerGain = wetLayerGain
+        targetWetLayerGain = wetLayerGain
+        wetLayerGainStep = 0
+        wetLayerGainRampSamplesRemaining = 0
+    }
+
     private func syncOutputGainRenderState(fromDecibels decibels: AUValue) {
         let linearGain = Self.linearGain(fromDecibels: decibels)
         outputGainControlState.syncAllStates(to: decibels)
@@ -303,26 +399,68 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         outputGainLinearStep = (targetLinearGain - currentOutputGainLinear) / AUValue(safeDurationSamples)
     }
 
+    private func setImmediateWetLayerGain(toDryWetMixPercent dryWetMixPercent: AUValue) {
+        setImmediateWetLayerGain(
+            toWetLayerGain: WashRackWetLayerMixing.wetLayerGain(fromDryWetMixPercent: dryWetMixPercent)
+        )
+        wetLayerControlState.updateDryWetMix(dryWetMixPercent)
+    }
+
+    private func setImmediateWetLayerGain(toWetLayerGain wetLayerGain: AUValue) {
+        targetWetLayerGain = wetLayerGain
+        currentWetLayerGain = wetLayerGain
+        wetLayerGainStep = 0
+        wetLayerGainRampSamplesRemaining = 0
+    }
+
+    private func beginWetLayerGainRamp(toDryWetMixPercent dryWetMixPercent: AUValue, durationSamples: AUAudioFrameCount) {
+        beginWetLayerGainRamp(
+            toWetLayerGain: WashRackWetLayerMixing.wetLayerGain(fromDryWetMixPercent: dryWetMixPercent),
+            durationSamples: durationSamples
+        )
+        wetLayerControlState.updateDryWetMix(dryWetMixPercent)
+    }
+
+    private func beginWetLayerGainRamp(toWetLayerGain wetLayerGain: AUValue, durationSamples: AUAudioFrameCount) {
+        let safeDurationSamples = max(1, durationSamples)
+        targetWetLayerGain = wetLayerGain
+        wetLayerGainRampSamplesRemaining = safeDurationSamples
+        wetLayerGainStep = (wetLayerGain - currentWetLayerGain) / AUValue(safeDurationSamples)
+    }
+
     private func outputGainSmoothingSampleCount() -> AUAudioFrameCount {
         let sampleRate = outputBus.format.sampleRate
         return max(1, AUAudioFrameCount((sampleRate * Double(Self.outputGainSmoothingTimeSeconds)).rounded()))
     }
 
-    private func applyOutputGain(
+    private func wetLayerMixSmoothingSampleCount() -> AUAudioFrameCount {
+        let sampleRate = outputBus.format.sampleRate
+        return max(1, AUAudioFrameCount((sampleRate * Double(Self.wetLayerMixSmoothingTimeSeconds)).rounded()))
+    }
+
+    private func applyTopologyAndOutputGain(
         to outputBuffers: UnsafeMutableAudioBufferListPointer,
         startFrame: Int,
-        frameCount: Int
+        frameCount: Int,
+        effectEnabled: Bool
     ) {
         guard frameCount > 0 else {
             return
         }
 
+        var wetLayerGain = currentWetLayerGain
+        var wetLayerStep = wetLayerGainStep
+        var remainingWetLayerRampSamples = Int(wetLayerGainRampSamplesRemaining)
         var gain = currentOutputGainLinear
         var step = outputGainLinearStep
         var remainingRampSamples = Int(outputGainRampSamplesRemaining)
 
         for sampleIndex in startFrame ..< startFrame + frameCount {
-            let sampleGain = gain
+            let topologyScale = WashRackWetLayerMixing.topologyScaleFactor(
+                fromWetLayerGain: wetLayerGain,
+                effectEnabled: effectEnabled
+            )
+            let sampleGain = gain * topologyScale
 
             for buffer in outputBuffers {
                 guard let channelData = buffer.mData?.assumingMemoryBound(to: Float.self) else {
@@ -330,6 +468,16 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                 }
 
                 channelData[sampleIndex] *= sampleGain
+            }
+
+            if remainingWetLayerRampSamples > 0 {
+                wetLayerGain += wetLayerStep
+                remainingWetLayerRampSamples -= 1
+
+                if remainingWetLayerRampSamples == 0 {
+                    wetLayerGain = targetWetLayerGain
+                    wetLayerStep = 0
+                }
             }
 
             if remainingRampSamples > 0 {
@@ -343,6 +491,9 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
             }
         }
 
+        currentWetLayerGain = wetLayerGain
+        wetLayerGainStep = wetLayerStep
+        wetLayerGainRampSamplesRemaining = AUAudioFrameCount(remainingWetLayerRampSamples)
         currentOutputGainLinear = gain
         outputGainLinearStep = step
         outputGainRampSamplesRemaining = AUAudioFrameCount(remainingRampSamples)
@@ -373,7 +524,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         outputGainControlState.hostVisibleDecibels()
     }
 
-    private static func linearGainValuesDiffer(_ lhs: AUValue, _ rhs: AUValue) -> Bool {
+    private static func valuesDiffer(_ lhs: AUValue, _ rhs: AUValue) -> Bool {
         abs(lhs - rhs) > 0.0001
     }
 

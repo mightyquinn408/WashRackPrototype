@@ -2,7 +2,7 @@
 
 - Document Status: Draft
 - Product Owner: Mike Quinn
-- Last Updated: 2026-06-17
+- Last Updated: 2026-06-18
 
 ## Product Vision
 
@@ -72,6 +72,14 @@ At the product level, the expected feel is:
 - optional delay adds motion and depth
 - enable/bypass behavior makes insertion easy in real sessions
 
+Current Alpha topology proof:
+
+- `effectEnabled = 0` means dry anchor straight to the output stage
+- `effectEnabled = 1` means dry anchor plus a separate wet movement layer
+- `dryWetMix` controls wet-layer amount under the retained dry anchor
+- `dryWetMix` is not a full dry/wet crossfade that fades the dry path away
+- the first AU proof uses a mirrored wet placeholder before filter, reverb, and delay are made product-complete
+
 ## Core Features
 
 ### Dry Path Retention
@@ -83,6 +91,8 @@ Requirements:
 - the dry path should remain intentionally audible in typical transition usage
 - wash effects should layer around the dry source instead of replacing it by default
 - product tuning should avoid the common failure mode where the source disappears too early
+- `dryWetMix = 0%` should produce dry anchor only
+- `dryWetMix = 100%` should produce maximum wet-layer contribution while the dry anchor remains audible
 
 ### Wash Reverb
 
@@ -123,6 +133,8 @@ Requirements:
 - bypass should behave predictably in hosts
 - effect enable should support arrangement and comparison workflows
 - toggling the effect should not create avoidable surprises in project recall or automation playback
+- `effectEnabled` should control the WashRack movement layer rather than relying on host bypass
+- when `effectEnabled = 0`, the signal should pass through the output stage as dry anchor only
 
 ## Product Differentiation
 
@@ -206,29 +218,33 @@ This phase has already de-risked the main AUv3 integration concerns and establis
 
 Alpha should focus on making the core product concept real in the AU:
 
-1. implement `Input Gain`
-2. implement AU-side `Effect Enable / Bypass`
-3. wire low-pass cutoff and resonance into AU DSP
-4. wire delay time, feedback, and dry/wet into AU DSP
-5. define the AU dry-path strategy clearly
-6. validate automation and recall in Logic and Ableton for all shipped parameters
+1. prove retained dry-anchor plus wet-layer AU topology
+2. define AU-side `Effect Enabled` semantics as movement-layer enable, not host bypass
+3. define `Dry/Wet Mix` semantics as wet-layer amount under a retained dry anchor
+4. ship the first wet-layer placeholder using mirrored input with no hidden gain compensation
+5. validate automation and recall in Logic and Ableton for `Effect Enabled`, `Dry/Wet Mix`, and `Output Gain`
+6. defer filter, wash reverb, delay movement, and loudness balancing to later slices
 
 Alpha outcome:
 
-- the plugin performs the essential transition workflow in-host
-- all exposed MVP parameters affect audio
-- DAW automation is trustworthy across the core effect set
+- the plugin proves the retained dry-path product concept in-host
+- `effectEnabled = 0` produces dry input through the output stage
+- `effectEnabled = 1` plus `dryWetMix` adds a wet-layer placeholder without removing the dry anchor
+- louder output at `dryWetMix = 100%`, including an approximately `+6 dB` summed result from correlated dry plus mirrored wet, is expected in this proof slice and deferred for later tuning
+- DAW automation and state recall remain trustworthy for the parameters used in the slice
 
 ### Beta
 
 Beta should focus on product fit, polish, and confidence:
 
-1. refine wash reverb behavior and macro interaction
-2. tune gain staging and perceived loudness across transitions
-3. improve the custom UI for production usability
-4. expand test coverage for state restore and parameter behavior
-5. evaluate whether DSP should consolidate further into a shared core
-6. run repeated host validation passes in Logic and Ableton on real projects
+1. add filter movement to the wet layer
+2. add wash reverb behavior to the wet layer
+3. add delay movement as a secondary wet-layer element
+4. tune gain staging and perceived loudness across transitions
+5. improve the custom UI for production usability
+6. expand test coverage for state restore and parameter behavior
+7. evaluate whether DSP should consolidate further into a shared core
+8. run repeated host validation passes in Logic and Ableton on real projects
 
 Beta outcome:
 
