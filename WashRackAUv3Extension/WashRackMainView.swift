@@ -11,12 +11,10 @@ struct WashRackMainView: View {
 
                 ParameterToggle(parameter: parameterTree.effectEnabled)
                 ParameterSlider(parameter: parameterTree.dryWetMix)
-                ParameterSlider(parameter: parameterTree.lowPassCutoff)
-                ParameterSlider(parameter: parameterTree.lowPassResonance)
                 ParameterSlider(parameter: parameterTree.outputGain)
             }
             .padding(20)
         }
-        .frame(minWidth: 360, minHeight: 320)
+        .frame(minWidth: 360, minHeight: 220)
     }
 }

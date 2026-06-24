@@ -77,4 +77,19 @@ struct WashRackWetLayerTopologyTests {
         #expect(wetLayerGain == 1)
         #expect(mixedSample == 1)
     }
+
+    @Test
+    func retainedDryAnchorRemainsPresentWhenWetReverbLayerIsAdded() {
+        let wetLayerGain = WashRackWetLayerMixing.wetLayerGain(fromDryWetMixPercent: 100)
+        let mixedSample = WashRackWetLayerMixing.mixedSample(
+            drySample: 0.5,
+            wetSample: 0.2,
+            wetLayerGain: wetLayerGain,
+            effectEnabled: true,
+            outputGainLinear: 1
+        )
+
+        #expect(mixedSample == 0.7)
+        #expect(mixedSample > 0.5)
+    }
 }

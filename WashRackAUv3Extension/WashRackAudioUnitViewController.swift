@@ -44,12 +44,12 @@ public final class WashRackAudioUnitViewController: AUViewController, AUAudioUni
 
     public override func loadView() {
         audioUnitViewControllerLogger.notice("loadView controller=\(self.controllerIdentifier, privacy: .public)")
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 340))
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 240))
     }
 
     public override func viewDidLoad() {
         super.viewDidLoad()
-        preferredContentSize = NSSize(width: 420, height: 340)
+        preferredContentSize = NSSize(width: 420, height: 240)
         audioUnitViewControllerLogger.notice(
             "viewDidLoad controller=\(self.controllerIdentifier, privacy: .public) audioUnitNil=\(self.audioUnit == nil, privacy: .public) lastCreatedNil=\(Self.lastCreatedAudioUnit == nil, privacy: .public) hostExists=\(self.hostingView != nil, privacy: .public)"
         )
@@ -211,12 +211,6 @@ public final class WashRackAudioUnitViewController: AUViewController, AUAudioUni
 
         let dryWetMixParameter: ObservableAUParameter = observableParameterTree.dryWetMix
         dryWetMixParameter.syncFromHostDisplayValue(washRackAudioUnit.dryWetMixUIDisplayPercent)
-
-        let lowPassCutoffParameter: ObservableAUParameter = observableParameterTree.lowPassCutoff
-        lowPassCutoffParameter.syncFromHostDisplayValue(washRackAudioUnit.lowPassCutoffUIDisplayHertz)
-
-        let lowPassResonanceParameter: ObservableAUParameter = observableParameterTree.lowPassResonance
-        lowPassResonanceParameter.syncFromHostDisplayValue(washRackAudioUnit.lowPassResonanceUIDisplayDecibels)
 
         let outputGainParameter: ObservableAUParameter = observableParameterTree.outputGain
         outputGainParameter.syncFromHostDisplayValue(washRackAudioUnit.outputGainUIDisplayDecibels)

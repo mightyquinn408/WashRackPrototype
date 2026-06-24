@@ -5,13 +5,10 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
     private static let parameterStateKey = "com.QuinnTech.WashRack.parameters"
     private static let outputGainSmoothingTimeSeconds: AUValue = 0.01
     private static let wetLayerMixSmoothingTimeSeconds: AUValue = 0.01
-    private static let lowPassParameterSmoothingTimeSeconds: AUValue = 0.01
 
     private let washRackParameterTree: AUParameterTree
     private let dryWetMixParameter: AUParameter
     private let effectEnabledParameter: AUParameter
-    private let lowPassCutoffParameter: AUParameter
-    private let lowPassResonanceParameter: AUParameter
     private let outputGainParameter: AUParameter
     private let inputBus: AUAudioUnitBus
     private let outputBus: AUAudioUnitBus
@@ -19,25 +16,17 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
     private var outputBusArray: AUAudioUnitBusArray!
     private let hostParameterValueStore: WashRackHostParameterValueStore
     private let wetLayerControlState: WashRackWetLayerControlState
-    private let lowPassControlState: WashRackLowPassControlState
     private let outputGainControlState: WashRackOutputGainControlState
-    private var wetLayerLowPassFilter = WashRackWetLayerLowPassFilter()
+    private let washReverb = WashRackWashReverb()
     private var currentWetLayerGain: AUValue
     private var targetWetLayerGain: AUValue
     private var wetLayerGainStep: AUValue
     private var wetLayerGainRampSamplesRemaining: AUAudioFrameCount
-    private var currentLowPassCutoff: AUValue
-    private var targetLowPassCutoff: AUValue
-    private var lowPassCutoffStep: AUValue
-    private var lowPassCutoffRampSamplesRemaining: AUAudioFrameCount
-    private var currentLowPassResonance: AUValue
-    private var targetLowPassResonance: AUValue
-    private var lowPassResonanceStep: AUValue
-    private var lowPassResonanceRampSamplesRemaining: AUAudioFrameCount
     private var currentOutputGainLinear: AUValue
     private var targetOutputGainLinear: AUValue
     private var outputGainLinearStep: AUValue
     private var outputGainRampSamplesRemaining: AUAudioFrameCount
+    private var wasEffectEnabledLastRender: Bool
 
     @objc public override init(
         componentDescription: AudioComponentDescription,
@@ -61,17 +50,17 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                 code: Int(kAudioUnitErr_InvalidParameter)
             )
         }
-        guard let lowPassCutoffParameter = washRackParameterTree.parameter(
+        guard washRackParameterTree.parameter(
             withAddress: WashRackParameterAddress.lowPassCutoff.rawValue
-        ) else {
+        ) != nil else {
             throw NSError(
                 domain: NSOSStatusErrorDomain,
                 code: Int(kAudioUnitErr_InvalidParameter)
             )
         }
-        guard let lowPassResonanceParameter = washRackParameterTree.parameter(
+        guard washRackParameterTree.parameter(
             withAddress: WashRackParameterAddress.lowPassResonance.rawValue
-        ) else {
+        ) != nil else {
             throw NSError(
                 domain: NSOSStatusErrorDomain,
                 code: Int(kAudioUnitErr_InvalidParameter)
@@ -90,16 +79,12 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         let defaultLinearGain = Self.linearGain(fromDecibels: defaultGainDecibels)
         let defaultDryWetMix = dryWetMixParameter.value
         let defaultEffectEnabled = effectEnabledParameter.value
-        let defaultLowPassCutoff = lowPassCutoffParameter.value
-        let defaultLowPassResonance = lowPassResonanceParameter.value
         let defaultWetLayerGain = WashRackWetLayerMixing.wetLayerGain(
             fromDryWetMixPercent: defaultDryWetMix
         )
 
         self.dryWetMixParameter = dryWetMixParameter
         self.effectEnabledParameter = effectEnabledParameter
-        self.lowPassCutoffParameter = lowPassCutoffParameter
-        self.lowPassResonanceParameter = lowPassResonanceParameter
         self.outputGainParameter = outputGainParameter
         inputBus = try AUAudioUnitBus(format: defaultFormat)
         outputBus = try AUAudioUnitBus(format: defaultFormat)
@@ -110,27 +95,16 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
             defaultDryWetMix: defaultDryWetMix,
             defaultEffectEnabled: defaultEffectEnabled
         )
-        lowPassControlState = WashRackLowPassControlState(
-            defaultCutoff: defaultLowPassCutoff,
-            defaultResonance: defaultLowPassResonance
-        )
         outputGainControlState = WashRackOutputGainControlState(defaultDecibels: defaultGainDecibels)
         currentWetLayerGain = defaultWetLayerGain
         targetWetLayerGain = defaultWetLayerGain
         wetLayerGainStep = 0
         wetLayerGainRampSamplesRemaining = 0
-        currentLowPassCutoff = defaultLowPassCutoff
-        targetLowPassCutoff = defaultLowPassCutoff
-        lowPassCutoffStep = 0
-        lowPassCutoffRampSamplesRemaining = 0
-        currentLowPassResonance = defaultLowPassResonance
-        targetLowPassResonance = defaultLowPassResonance
-        lowPassResonanceStep = 0
-        lowPassResonanceRampSamplesRemaining = 0
         currentOutputGainLinear = defaultLinearGain
         targetOutputGainLinear = defaultLinearGain
         outputGainLinearStep = 0
         outputGainRampSamplesRemaining = 0
+        wasEffectEnabledLastRender = defaultEffectEnabled >= 0.5
 
         try super.init(componentDescription: componentDescription, options: options)
 
@@ -151,10 +125,6 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                 self.wetLayerControlState.updateDryWetMix(value)
             } else if address == .effectEnabled {
                 self.wetLayerControlState.updateEffectEnabled(value)
-            } else if address == .lowPassCutoff {
-                self.lowPassControlState.updateCutoff(value)
-            } else if address == .lowPassResonance {
-                self.lowPassControlState.updateResonance(value)
             } else if address == .outputGain {
                 self.outputGainControlState.noteBaseValueChange(value, updateVisibleValue: true)
             }
@@ -178,7 +148,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
 
         syncOutputGainStateFromParameter()
         syncWetLayerStateFromParameter()
-        syncLowPassStateFromParameter()
+        washReverb.prepare(sampleRate: outputBus.format.sampleRate)
     }
 
     public override var inputBusses: AUAudioUnitBusArray {
@@ -211,8 +181,8 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
 
         syncOutputGainStateFromParameter()
         syncWetLayerStateFromParameter()
-        syncLowPassStateFromParameter()
-        wetLayerLowPassFilter.reset()
+        washReverb.prepare(sampleRate: outputFormat.sampleRate)
+        wasEffectEnabledLastRender = wetLayerControlState.effectEnabled() >= 0.5
         try super.allocateRenderResources()
     }
 
@@ -246,8 +216,8 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
             }
 
             syncWetLayerStateFromParameter()
-            syncLowPassStateFromParameter()
-            wetLayerLowPassFilter.reset()
+            washReverb.reset()
+            wasEffectEnabledLastRender = wetLayerControlState.effectEnabled() >= 0.5
         }
     }
 
@@ -281,9 +251,6 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
             let desiredWetLayerGain = WashRackWetLayerMixing.wetLayerGain(
                 fromDryWetMixPercent: self.wetLayerControlState.dryWetMix()
             )
-            let desiredLowPassCutoff = self.lowPassControlState.cutoff()
-            let desiredLowPassResonance = self.lowPassControlState.resonance()
-            let sampleRate = self.outputBus.format.sampleRate
             var effectEnabled = self.wetLayerControlState.effectEnabled() >= 0.5
             var renderedFrames = 0
             var handledOutputGainEvent = false
@@ -295,17 +262,9 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                     durationSamples: self.wetLayerMixSmoothingSampleCount()
                 )
             }
-            if Self.valuesDiffer(desiredLowPassCutoff, self.targetLowPassCutoff) {
-                self.beginLowPassCutoffRamp(
-                    toCutoff: desiredLowPassCutoff,
-                    durationSamples: self.lowPassParameterSmoothingSampleCount()
-                )
-            }
-            if Self.valuesDiffer(desiredLowPassResonance, self.targetLowPassResonance) {
-                self.beginLowPassResonanceRamp(
-                    toResonance: desiredLowPassResonance,
-                    durationSamples: self.lowPassParameterSmoothingSampleCount()
-                )
+
+            if self.wasEffectEnabledLastRender && !effectEnabled {
+                self.washReverb.reset()
             }
 
             while let currentEvent = event {
@@ -316,8 +275,6 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                     let isRelevantParameter = parameterEvent.parameterAddress == self.outputGainParameter.address
                         || parameterEvent.parameterAddress == self.dryWetMixParameter.address
                         || parameterEvent.parameterAddress == self.effectEnabledParameter.address
-                        || parameterEvent.parameterAddress == self.lowPassCutoffParameter.address
-                        || parameterEvent.parameterAddress == self.lowPassResonanceParameter.address
 
                     guard isRelevantParameter else {
                         event = nextEvent
@@ -335,8 +292,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                             to: outputBuffers,
                             startFrame: renderedFrames,
                             frameCount: eventFrame - renderedFrames,
-                            effectEnabled: effectEnabled,
-                            sampleRate: sampleRate
+                            effectEnabled: effectEnabled
                         )
                         renderedFrames = eventFrame
                     }
@@ -361,26 +317,11 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                             self.setImmediateWetLayerGain(toDryWetMixPercent: parameterEvent.value)
                         }
                     } else if parameterEvent.parameterAddress == self.effectEnabledParameter.address {
+                        if effectEnabled, parameterEvent.value < 0.5 {
+                            self.washReverb.reset()
+                        }
                         self.wetLayerControlState.updateEffectEnabled(parameterEvent.value)
                         effectEnabled = parameterEvent.value >= 0.5
-                    } else if parameterEvent.parameterAddress == self.lowPassCutoffParameter.address {
-                        if parameterEvent.rampDurationSampleFrames > 0 {
-                            self.beginLowPassCutoffRamp(
-                                toCutoff: parameterEvent.value,
-                                durationSamples: max(1, parameterEvent.rampDurationSampleFrames)
-                            )
-                        } else {
-                            self.setImmediateLowPassCutoff(toCutoff: parameterEvent.value)
-                        }
-                    } else if parameterEvent.parameterAddress == self.lowPassResonanceParameter.address {
-                        if parameterEvent.rampDurationSampleFrames > 0 {
-                            self.beginLowPassResonanceRamp(
-                                toResonance: parameterEvent.value,
-                                durationSamples: max(1, parameterEvent.rampDurationSampleFrames)
-                            )
-                        } else {
-                            self.setImmediateLowPassResonance(toResonance: parameterEvent.value)
-                        }
                     }
                 }
 
@@ -404,10 +345,11 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                     to: outputBuffers,
                     startFrame: renderedFrames,
                     frameCount: totalFrames - renderedFrames,
-                    effectEnabled: effectEnabled,
-                    sampleRate: sampleRate
+                    effectEnabled: effectEnabled
                 )
             }
+
+            self.wasEffectEnabledLastRender = effectEnabled
 
             return noErr
         }
@@ -449,13 +391,6 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         )
     }
 
-    private func syncLowPassStateFromParameter() {
-        syncLowPassRenderState(
-            cutoff: hostParameterValueStore.value(for: .lowPassCutoff),
-            resonance: hostParameterValueStore.value(for: .lowPassResonance)
-        )
-    }
-
     private func syncWetLayerRenderState(dryWetMix: AUValue, effectEnabled: AUValue) {
         let wetLayerGain = WashRackWetLayerMixing.wetLayerGain(fromDryWetMixPercent: dryWetMix)
         wetLayerControlState.syncAllStates(dryWetMix: dryWetMix, effectEnabled: effectEnabled)
@@ -463,18 +398,6 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         targetWetLayerGain = wetLayerGain
         wetLayerGainStep = 0
         wetLayerGainRampSamplesRemaining = 0
-    }
-
-    private func syncLowPassRenderState(cutoff: AUValue, resonance: AUValue) {
-        lowPassControlState.syncAllStates(cutoff: cutoff, resonance: resonance)
-        currentLowPassCutoff = cutoff
-        targetLowPassCutoff = cutoff
-        lowPassCutoffStep = 0
-        lowPassCutoffRampSamplesRemaining = 0
-        currentLowPassResonance = resonance
-        targetLowPassResonance = resonance
-        lowPassResonanceStep = 0
-        lowPassResonanceRampSamplesRemaining = 0
     }
 
     private func syncOutputGainRenderState(fromDecibels decibels: AUValue) {
@@ -538,38 +461,6 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         wetLayerGainStep = (wetLayerGain - currentWetLayerGain) / AUValue(safeDurationSamples)
     }
 
-    private func setImmediateLowPassCutoff(toCutoff cutoff: AUValue) {
-        targetLowPassCutoff = cutoff
-        currentLowPassCutoff = cutoff
-        lowPassCutoffStep = 0
-        lowPassCutoffRampSamplesRemaining = 0
-        lowPassControlState.updateCutoff(cutoff)
-    }
-
-    private func beginLowPassCutoffRamp(toCutoff cutoff: AUValue, durationSamples: AUAudioFrameCount) {
-        let safeDurationSamples = max(1, durationSamples)
-        targetLowPassCutoff = cutoff
-        lowPassCutoffRampSamplesRemaining = safeDurationSamples
-        lowPassCutoffStep = (cutoff - currentLowPassCutoff) / AUValue(safeDurationSamples)
-        lowPassControlState.updateCutoff(cutoff)
-    }
-
-    private func setImmediateLowPassResonance(toResonance resonance: AUValue) {
-        targetLowPassResonance = resonance
-        currentLowPassResonance = resonance
-        lowPassResonanceStep = 0
-        lowPassResonanceRampSamplesRemaining = 0
-        lowPassControlState.updateResonance(resonance)
-    }
-
-    private func beginLowPassResonanceRamp(toResonance resonance: AUValue, durationSamples: AUAudioFrameCount) {
-        let safeDurationSamples = max(1, durationSamples)
-        targetLowPassResonance = resonance
-        lowPassResonanceRampSamplesRemaining = safeDurationSamples
-        lowPassResonanceStep = (resonance - currentLowPassResonance) / AUValue(safeDurationSamples)
-        lowPassControlState.updateResonance(resonance)
-    }
-
     private func outputGainSmoothingSampleCount() -> AUAudioFrameCount {
         let sampleRate = outputBus.format.sampleRate
         return max(1, AUAudioFrameCount((sampleRate * Double(Self.outputGainSmoothingTimeSeconds)).rounded()))
@@ -580,17 +471,11 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         return max(1, AUAudioFrameCount((sampleRate * Double(Self.wetLayerMixSmoothingTimeSeconds)).rounded()))
     }
 
-    private func lowPassParameterSmoothingSampleCount() -> AUAudioFrameCount {
-        let sampleRate = outputBus.format.sampleRate
-        return max(1, AUAudioFrameCount((sampleRate * Double(Self.lowPassParameterSmoothingTimeSeconds)).rounded()))
-    }
-
     private func applyTopologyAndOutputGain(
         to outputBuffers: UnsafeMutableAudioBufferListPointer,
         startFrame: Int,
         frameCount: Int,
-        effectEnabled: Bool,
-        sampleRate: Double
+        effectEnabled: Bool
     ) {
         guard frameCount > 0 else {
             return
@@ -599,22 +484,30 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         var wetLayerGain = currentWetLayerGain
         var wetLayerStep = wetLayerGainStep
         var remainingWetLayerRampSamples = Int(wetLayerGainRampSamplesRemaining)
-        var lowPassCutoff = currentLowPassCutoff
-        var cutoffStep = self.lowPassCutoffStep
-        var remainingLowPassCutoffRampSamples = Int(lowPassCutoffRampSamplesRemaining)
-        var lowPassResonance = currentLowPassResonance
-        var resonanceStep = self.lowPassResonanceStep
-        var remainingLowPassResonanceRampSamples = Int(lowPassResonanceRampSamplesRemaining)
         var gain = currentOutputGainLinear
         var step = outputGainLinearStep
         var remainingRampSamples = Int(outputGainRampSamplesRemaining)
 
         for sampleIndex in startFrame ..< startFrame + frameCount {
-            let coefficients = WashRackWetLayerLowPassFilter.coefficients(
-                sampleRate: sampleRate,
-                cutoff: lowPassCutoff,
-                resonance: lowPassResonance
-            )
+            var dryMonoInput: AUValue = 0
+            var activeChannelCount = 0
+
+            for buffer in outputBuffers {
+                guard let channelData = buffer.mData?.assumingMemoryBound(to: Float.self) else {
+                    continue
+                }
+
+                dryMonoInput += channelData[sampleIndex]
+                activeChannelCount += 1
+            }
+
+            if activeChannelCount > 1 {
+                dryMonoInput /= AUValue(activeChannelCount)
+            }
+
+            let wetStereoSample = effectEnabled
+                ? washReverb.process(monoInput: dryMonoInput)
+                : (left: AUValue(0), right: AUValue(0))
 
             for channelIndex in outputBuffers.indices {
                 let buffer = outputBuffers[channelIndex]
@@ -623,11 +516,7 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                 }
 
                 let drySample = channelData[sampleIndex]
-                let wetSample = wetLayerLowPassFilter.process(
-                    sample: drySample,
-                    channelIndex: channelIndex,
-                    coefficients: coefficients
-                )
+                let wetSample = channelIndex == 0 ? wetStereoSample.left : wetStereoSample.right
                 channelData[sampleIndex] = WashRackWetLayerMixing.mixedSample(
                     drySample: drySample,
                     wetSample: wetSample,
@@ -647,26 +536,6 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
                 }
             }
 
-            if remainingLowPassCutoffRampSamples > 0 {
-                lowPassCutoff += cutoffStep
-                remainingLowPassCutoffRampSamples -= 1
-
-                if remainingLowPassCutoffRampSamples == 0 {
-                    lowPassCutoff = targetLowPassCutoff
-                    cutoffStep = 0
-                }
-            }
-
-            if remainingLowPassResonanceRampSamples > 0 {
-                lowPassResonance += resonanceStep
-                remainingLowPassResonanceRampSamples -= 1
-
-                if remainingLowPassResonanceRampSamples == 0 {
-                    lowPassResonance = targetLowPassResonance
-                    resonanceStep = 0
-                }
-            }
-
             if remainingRampSamples > 0 {
                 gain += step
                 remainingRampSamples -= 1
@@ -681,12 +550,6 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
         currentWetLayerGain = wetLayerGain
         wetLayerGainStep = wetLayerStep
         wetLayerGainRampSamplesRemaining = AUAudioFrameCount(remainingWetLayerRampSamples)
-        currentLowPassCutoff = lowPassCutoff
-        self.lowPassCutoffStep = cutoffStep
-        self.lowPassCutoffRampSamplesRemaining = AUAudioFrameCount(remainingLowPassCutoffRampSamples)
-        currentLowPassResonance = lowPassResonance
-        self.lowPassResonanceStep = resonanceStep
-        self.lowPassResonanceRampSamplesRemaining = AUAudioFrameCount(remainingLowPassResonanceRampSamples)
         currentOutputGainLinear = gain
         outputGainLinearStep = step
         outputGainRampSamplesRemaining = AUAudioFrameCount(remainingRampSamples)
@@ -716,16 +579,6 @@ public final class WashRackAudioUnit: AUAudioUnit, @unchecked Sendable {
     @MainActor
     var dryWetMixUIDisplayPercent: AUValue {
         wetLayerControlState.dryWetMix()
-    }
-
-    @MainActor
-    var lowPassCutoffUIDisplayHertz: AUValue {
-        lowPassControlState.cutoff()
-    }
-
-    @MainActor
-    var lowPassResonanceUIDisplayDecibels: AUValue {
-        lowPassControlState.resonance()
     }
 
     @MainActor

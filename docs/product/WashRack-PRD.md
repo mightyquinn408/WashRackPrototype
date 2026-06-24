@@ -2,7 +2,7 @@
 
 - Document Status: Draft
 - Product Owner: Mike Quinn
-- Last Updated: 2026-06-18
+- Last Updated: 2026-06-24
 
 ## Product Vision
 
@@ -31,9 +31,9 @@ WashRack should solve this by giving the user one focused transition tool built 
 
 - retained dry signal
 - musical wash reverb
-- controllable filter movement
 - optional delay movement
 - easy host automation
+- later filter enhancement when it supports the workflow
 
 The intended inspiration is the D. Ramirez workflow: preserve the groove, keep the dry path grounded, then add wash, motion, and tension around it.
 
@@ -68,8 +68,8 @@ At the product level, the expected feel is:
 
 - dry signal remains anchored
 - wash reverb adds scale and lift
-- filter movement pushes energy upward or downward
 - optional delay adds motion and depth
+- filter movement remains a later enhancement rather than an MVP requirement
 - enable/bypass behavior makes insertion easy in real sessions
 
 Current Alpha AU slice:
@@ -78,9 +78,9 @@ Current Alpha AU slice:
 - `effectEnabled = 1` means dry anchor plus a separate wet movement layer
 - `dryWetMix` controls wet-layer amount under the retained dry anchor
 - `dryWetMix` is not a full dry/wet crossfade that fades the dry path away
-- the wet layer currently uses a mirrored-input placeholder with low-pass filter movement before reverb and delay are made product-complete
-- `lowPassCutoff` and `lowPassResonance` act on the wet layer only; the dry anchor remains untouched
-- the minimal AU editor exposes `Effect Enabled`, `Dry/Wet Mix`, `Low-Pass Cutoff`, `Low-Pass Resonance`, and `Output Gain` for in-host validation
+- the wet layer currently uses a fixed-tuned custom wash reverb before delay is made product-complete
+- `lowPassCutoff` and `lowPassResonance` remain in the public parameter contract and restore path, but are behaviorally unused in the current MVP slice
+- the minimal AU editor exposes `Effect Enabled`, `Dry/Wet Mix`, and `Output Gain` for in-host validation
 
 ## Core Features
 
@@ -108,7 +108,7 @@ Requirements:
 
 ### Filter Movement
 
-Filter movement is a core transition mechanism. It should help shape tension and release while supporting the retained-dry philosophy.
+Filter movement is a useful enhancement, but it is not required for the current MVP. It should be added only after retained dry behavior, wash reverb, and delay movement feel right in the core workflow.
 
 Requirements:
 
@@ -195,10 +195,18 @@ The MVP is successful when:
 - the plugin loads reliably as a macOS AUv3 effect in Logic Pro and Ableton Live 12+
 - the core transition workflow feels musical and repeatable
 - retained dry signal clearly preserves groove during builds
-- wash reverb, filter movement, and delay movement work as a coherent effect concept
+- wash reverb and delay movement work as a coherent effect concept around the retained dry anchor
 - host automation is smooth, visible, and project-safe
 - project reopen restores parameters and expected behavior reliably
 - the plugin feels like a focused transition tool rather than a generic effects bundle
+
+MVP priority order:
+
+1. retained dry topology
+2. wash reverb
+3. delay movement
+4. gain and loudness tuning
+5. filter movement as a later enhancement
 
 ## Recommended Development Order
 
@@ -223,25 +231,25 @@ Alpha should focus on making the core product concept real in the AU:
 1. prove retained dry-anchor plus wet-layer AU topology
 2. define AU-side `Effect Enabled` semantics as movement-layer enable, not host bypass
 3. define `Dry/Wet Mix` semantics as wet-layer amount under a retained dry anchor
-4. ship the first wet-layer placeholder using mirrored input with no hidden gain compensation
+4. ship the first fixed-tuned wet-layer wash reverb with no new public parameters
 5. validate automation and recall in Logic and Ableton for `Effect Enabled`, `Dry/Wet Mix`, and `Output Gain`
-6. defer filter, wash reverb, delay movement, and loudness balancing to later slices
+6. defer delay movement, loudness balancing, and filter movement to later slices
 
 Alpha outcome:
 
 - the plugin proves the retained dry-path product concept in-host
 - `effectEnabled = 0` produces dry input through the output stage
-- `effectEnabled = 1` plus `dryWetMix` adds a wet-layer placeholder without removing the dry anchor
-- louder output at `dryWetMix = 100%`, including an approximately `+6 dB` summed result from correlated dry plus mirrored wet, is expected in this proof slice and deferred for later tuning
+- `effectEnabled = 1` plus `dryWetMix` adds a wet wash layer without removing the dry anchor
+- louder output at higher `dryWetMix` settings is acceptable in this MVP slice and deferred for later tuning
 - DAW automation and state recall remain trustworthy for the parameters used in the slice
 
 ### Beta
 
 Beta should focus on product fit, polish, and confidence:
 
-1. add wash reverb behavior to the wet layer
-2. add delay movement as a secondary wet-layer element
-3. tune gain staging and perceived loudness across transitions
+1. add delay movement as a secondary wet-layer element
+2. tune gain staging and perceived loudness across transitions
+3. add filter movement only after the reverb-plus-delay workflow feels product-correct
 4. improve the custom UI for production usability
 5. expand test coverage for state restore and parameter behavior
 6. evaluate whether DSP should consolidate further into a shared core
