@@ -32,6 +32,9 @@ struct WashRackHostParameterValueStoreTests {
         store.setValue(14, for: .outputGain)
         store.setValue(1.5, for: .delayTime)
         store.setValue(58, for: .dryWetMix)
+        store.setValue(2_400, for: .lowPassCutoff)
+        store.setValue(8, for: .lowPassResonance)
+        store.setValue(0, for: .effectEnabled)
 
         let snapshot = store.snapshotByIdentifier()
         let restoredStore = WashRackHostParameterValueStore()
@@ -41,10 +44,16 @@ struct WashRackHostParameterValueStoreTests {
         #expect(restoredValues[.outputGain] == 14)
         #expect(restoredValues[.delayTime] == 1.5)
         #expect(restoredValues[.dryWetMix] == 58)
+        #expect(restoredValues[.lowPassCutoff] == 2_400)
+        #expect(restoredValues[.lowPassResonance] == 8)
+        #expect(restoredValues[.effectEnabled] == 0)
 
         #expect(restoredStore.value(for: .inputGain) == -9)
         #expect(restoredStore.value(for: .outputGain) == 14)
         #expect(restoredStore.value(for: .delayTime) == 1.5)
         #expect(restoredStore.value(for: .dryWetMix) == 58)
+        #expect(restoredStore.value(for: .lowPassCutoff) == 2_400)
+        #expect(restoredStore.value(for: .lowPassResonance) == 8)
+        #expect(restoredStore.value(for: .effectEnabled) == 0)
     }
 }
