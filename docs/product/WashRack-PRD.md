@@ -2,13 +2,33 @@
 
 - Document Status: Draft
 - Product Owner: Mike Quinn
-- Last Updated: 2026-06-24
+- Last Updated: 2026-06-25
 
 ## Product Vision
 
 WashRack is a workflow-first transition effect for electronic music production and performance. The product should help a producer or DJ create energetic build-ups, transitions, and drops without destroying the groove, swallowing the dry signal, or requiring a large multi-effect routing setup.
 
 The long-term vision is a focused "wash" tool that feels immediate and musical in a DAW, especially in Logic Pro and Ableton Live, rather than a broad generic multi-effects plugin with dozens of disconnected modes.
+
+## Long-Term Product Vision
+
+WashRack's long-term direction is a retained-dry transition instrument built around one coordinated wet movement layer.
+
+That wet movement layer should eventually combine:
+
+- wash reverb for size and lift
+- delay movement for motion and rhythmic excitement
+- filter movement for tonal shaping and transition tension
+
+Long term, producer-facing macro concepts may emerge from that coordinated layer, such as:
+
+- `Wash Size`
+- `Movement`
+- `Transition Style`
+
+Those concepts should only exist if they make transition writing faster and more musical. They should not turn WashRack into a generic multi-effects rack with disconnected pages of controls.
+
+The immediate product is not trying to replace every specialty processor. Today, many producers handle high-pass and low-pass resonance sweeps externally with tools like FabFilter Simplon while using separate reverb and delay tools around them. Long term, selectively bringing that workflow into WashRack could reduce setup friction, but only if it reinforces the retained dry-anchor product identity.
 
 ## Target User
 
@@ -33,7 +53,7 @@ WashRack should solve this by giving the user one focused transition tool built 
 - musical wash reverb
 - optional delay movement
 - easy host automation
-- later filter enhancement when it supports the workflow
+- later coordinated filter enhancement when it supports the workflow
 
 The intended inspiration is the D. Ramirez workflow: preserve the groove, keep the dry path grounded, then add wash, motion, and tension around it.
 
@@ -52,13 +72,17 @@ Completed:
 
 - AUv3 shell
 - parameter contract
+- retained dry anchor topology
+- wet-layer wash reverb
 - host automation
 - state restoration
 - output gain vertical slice
+- Ableton validation
 
 In Progress:
 
 - DSP feature implementation
+- producer workflow validation for the next movement slices
 
 ## Core Product Concept
 
@@ -69,8 +93,26 @@ At the product level, the expected feel is:
 - dry signal remains anchored
 - wash reverb adds scale and lift
 - optional delay adds motion and depth
-- filter movement remains a later enhancement rather than an MVP requirement
+- filter movement remains a later coordinated enhancement rather than an MVP requirement
 - enable/bypass behavior makes insertion easy in real sessions
+
+### MVP Versus Long-Term Evolution
+
+Immediate MVP scope is:
+
+- retained dry anchor
+- wash reverb
+- delay movement
+- automation-safe host behavior
+- dependable save and restore behavior
+
+Long-term evolution may add:
+
+- coordinated filter movement inside the wet layer
+- producer-facing macro behaviors
+- higher-level transition concepts such as `Wash Size`, `Movement`, and `Transition Style`
+
+This distinction matters. Filter DSP is not required for the current MVP. Filter exploration should remain deferred until the reverb-plus-delay workflow has been validated in real production sessions.
 
 Current Alpha AU slice:
 
@@ -110,11 +152,19 @@ Requirements:
 
 Filter movement is a useful enhancement, but it is not required for the current MVP. It should be added only after retained dry behavior, wash reverb, and delay movement feel right in the core workflow.
 
+Reference workflow note:
+
+- many producers currently use external tools such as FabFilter Simplon for high-pass and low-pass sweeps with resonance during buildups
+- long term, WashRack may absorb the most useful parts of that workflow to reduce setup friction
+- that future work must stay coordinated with the wash reverb and delay layer rather than becoming a standalone filter product
+
 Requirements:
 
 - low-pass movement should support classic sweep-down and tension-control workflows
+- high-pass and low-pass movement should support buildup and transition-writing workflows
 - resonance/Q should be musical and predictable under automation
 - filter behavior should complement reverb and delay instead of fighting them
+- filter behavior should preserve the retained dry anchor rather than replacing it
 
 ### Delay Movement
 
@@ -187,6 +237,7 @@ Requirements:
 - reuse logic where practical
 - keep host-specific AU code separate from core signal behavior
 - make future DSP slices portable between prototype and plugin where it supports clarity
+- preserve the ability for reverb, delay, and future filter movement to act as one coordinated wet layer behind a stable AU contract
 
 ## MVP Success Criteria
 
@@ -199,6 +250,8 @@ The MVP is successful when:
 - host automation is smooth, visible, and project-safe
 - project reopen restores parameters and expected behavior reliably
 - the plugin feels like a focused transition tool rather than a generic effects bundle
+
+The MVP is not blocked on filter DSP. Filter movement belongs to later product evolution after the reverb-plus-delay workflow proves itself in real sessions.
 
 MVP priority order:
 
@@ -250,17 +303,19 @@ Beta should focus on product fit, polish, and confidence:
 1. add delay movement as a secondary wet-layer element
 2. tune gain staging and perceived loudness across transitions
 3. add filter movement only after the reverb-plus-delay workflow feels product-correct
-4. improve the custom UI for production usability
-5. expand test coverage for state restore and parameter behavior
-6. evaluate whether DSP should consolidate further into a shared core
-7. decide when the standalone graph should align with the AU architecture
-8. run repeated host validation passes in Logic and Ableton on real projects
+4. run producer evaluation on real sessions before promoting filter controls
+5. improve the custom UI for production usability
+6. expand test coverage for state restore and parameter behavior
+7. evaluate whether DSP should consolidate further into a shared core
+8. decide when the standalone graph should align with the AU architecture
+9. run repeated host validation passes in Logic and Ableton on real projects
 
 Beta outcome:
 
 - the plugin feels intentional and production-ready for real transition writing
 - workflow is fast enough that users reach for it by default
 - the product identity is clear before broader release planning
+- any future filter work feels like movement shaping inside WashRack, not a separate filter plugin bolted on late
 
 ## Non-Goals (MVP)
 
