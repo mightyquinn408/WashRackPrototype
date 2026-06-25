@@ -96,25 +96,28 @@ final class WashRackWashReverb: @unchecked Sendable {
         private var buffer: [AUValue] = [0]
         private var index = 0
         private var feedback: AUValue = 0.5
+        private var validSampleCount = 0
 
         mutating func configure(length: Int, feedback: AUValue) {
             buffer = Array(repeating: 0, count: max(1, length))
             index = 0
             self.feedback = feedback
+            validSampleCount = 0
         }
 
         mutating func reset() {
-            for bufferIndex in buffer.indices {
-                buffer[bufferIndex] = 0
-            }
             index = 0
+            validSampleCount = 0
         }
 
         mutating func process(_ input: AUValue) -> AUValue {
-            let delayedSample = buffer[index]
+            let delayedSample = validSampleCount < buffer.count ? AUValue(0) : buffer[index]
             let output = -input + delayedSample
             buffer[index] = input + (delayedSample * feedback)
             advanceIndex()
+            if validSampleCount < buffer.count {
+                validSampleCount += 1
+            }
             return output
         }
 
@@ -130,24 +133,27 @@ final class WashRackWashReverb: @unchecked Sendable {
         private var buffer: [AUValue] = [0]
         private var index = 0
         private var feedback: AUValue = 0.8
+        private var validSampleCount = 0
 
         mutating func configure(length: Int, feedback: AUValue) {
             buffer = Array(repeating: 0, count: max(1, length))
             index = 0
             self.feedback = feedback
+            validSampleCount = 0
         }
 
         mutating func reset() {
-            for bufferIndex in buffer.indices {
-                buffer[bufferIndex] = 0
-            }
             index = 0
+            validSampleCount = 0
         }
 
         mutating func process(_ input: AUValue) -> AUValue {
-            let delayedSample = buffer[index]
+            let delayedSample = validSampleCount < buffer.count ? AUValue(0) : buffer[index]
             buffer[index] = input + (delayedSample * feedback)
             advanceIndex()
+            if validSampleCount < buffer.count {
+                validSampleCount += 1
+            }
             return delayedSample
         }
 
