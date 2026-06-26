@@ -19,8 +19,8 @@ The most important architectural boundary in this repo is the shared AU paramete
 
 Treat these as known project state, not as bugs by default:
 
-- Only `outputGain` is currently wired all the way through the AU render path.
-- The other shared AU parameters are intentionally exposed to hosts before their AU-side DSP is implemented.
+- The current Alpha AU slice includes retained dry anchor behavior, wet-layer wash reverb, `Effect Enabled`, `Dry/Wet Mix`, and `Output Gain`.
+- Delay movement, filter behavior, and the remaining shared parameter semantics are still intentionally incomplete on the AU side even though the public parameter contract remains exposed and stable.
 - The custom AU UI is intentionally minimal.
 - The standalone app signal chain is not yet reused inside the AU implementation.
 

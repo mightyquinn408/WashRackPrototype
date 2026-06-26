@@ -61,8 +61,8 @@ The current AUv3 implementation supports:
 
 Important current limitation:
 
-- only `Output Gain` is wired all the way through the AU render path so far
-- the other shared parameters are exposed and stable, but their DSP is not implemented in the AU yet
+- the current Alpha AU slice includes retained dry anchor behavior, wet-layer wash reverb, `Effect Enabled`, `Dry/Wet Mix`, and `Output Gain`
+- delay movement, filter behavior, input gain, feedback, and the remaining AU-side parameter semantics are still intentionally incomplete
 
 ## The Shared Parameter Contract
 
@@ -146,13 +146,13 @@ The AUv3 side is being built as a “boring” shell first:
 
 That is slower at the start, but it usually leads to fewer confusing bugs later.
 
-### Why only `Output Gain` is implemented in AU DSP so far
+### Why the AU DSP is still intentionally incomplete
 
-This is a vertical-slice approach. Instead of wiring everything at once, the project proves one complete path first:
+This project uses a vertical-slice approach. It started by proving one complete path first:
 
 `AUParameter -> host automation -> render-safe state -> DSP -> UI readback -> project restore`
 
-Once that path is solid, the same pattern can be applied to the remaining parameters.
+That pattern has now been extended into the retained dry-anchor plus wet-layer wash reverb Alpha slice. The remaining AU-side behaviors are still being added carefully so host automation, restore behavior, and product semantics stay stable as the plugin evolves.
 
 ## How To Build
 
@@ -208,7 +208,8 @@ That order moves from easiest concepts to the more advanced AUv3 topics.
 ## What Is Not Done Yet
 
 - the AU does not yet reuse the standalone AudioKit graph
-- delay, filter, input gain, dry/wet, feedback, and bypass are not yet wired into AU DSP
+- delay movement, filter behavior, input gain, and feedback are not yet product-complete in AU DSP
+- broader bypass workflow and later movement-layer refinement are still ahead
 - the custom plugin UI is still intentionally minimal
 - beginner documentation can still grow as more phases land
 
