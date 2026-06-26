@@ -11,6 +11,8 @@ The project currently has two active layers:
 - a standalone AudioKit app for quick DSP experimentation
 - an AUv3 extension that is being built as a careful vertical slice
 
+Before proposing plans or changing WashRack code, read `docs/architecture/AI-Development-Guide.md`. That document is the canonical source for product vision, AI-development guardrails, roadmap priorities, and the distinction between current MVP scope and long-term product evolution.
+
 The most important architectural boundary in this repo is the shared AU parameter contract in `WashRackShared/Parameters`. That contract must stay stable across the host, plugin UI, state restoration, and render code.
 
 ## Current Intentional Limitations
